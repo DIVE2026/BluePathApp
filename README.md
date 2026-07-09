@@ -1,73 +1,73 @@
-# BluePath — 스마트 해도 AI 모바일 앱
+# BluePath — Smart Ocean AI Mobile App
 
-전 연령 사용자가 해양 콘텐츠를 학습하고, 퀴즈 기반 티어 승급을 통해 성장하며, 교육 일정·이벤트·NCS 직무 로드맵을 AI로 추천받는 모바일 해양 인재 양성 플랫폼 prototype입니다.
+BluePath is a prototype mobile platform for cultivating future ocean talent. It helps users of all ages learn ocean-related content, grow through quiz-based tier promotion, and receive AI recommendations for educational schedules, events, and NCS-based career roadmaps.
 
-## Android Studio 실행 방법
+## How to Run in Android Studio
 
-1. Android Studio에서 `BluePathApp` 디렉토리를 엽니다.
-2. Gradle Sync를 실행합니다.
-3. 에뮬레이터 또는 실제 Android 기기에서 Run 합니다.
+1. Open the `BluePathApp` directory in Android Studio.
+2. Run Gradle Sync.
+3. Run the app on an emulator or a physical Android device.
 
-네트워크 연결은 YouTube 링크 실행에만 사용됩니다. 앱의 핵심 데이터와 추천 로직은 오프라인으로 동작합니다.
+Network access is only used to open YouTube links. The app's core data and recommendation logic work offline.
 
-## 구현된 기능
+## Implemented Features
 
-- 온보딩 해양 인재 DNA 진단
-- 사용자 프로필 저장: 연령대, 관심 분야, 목표, 수준, 페르소나
-- 브론즈/실버/골드/플래티넘/다이아 티어와 XP 게이지
-- 난도별 해양 영상 추천: 하/중/상 + 권장 티어
-- 영상 완료 처리 및 XP 증가
-- 승급 퀴즈: 티어별 난도, 정답 해설, XP 보상
-- 교육 프로그램 스케줄 추천
-- 이벤트/영화/공연/체험 추천
-- NCS 기반 진로 찾기: 직무, 필요 역량, 관련 근무지
-- BluePath AI Agent: 오프라인 룰 기반 상담
-- 마이페이지: 현재 티어, 학습 기록, 찜, 프로필 초기화
-- DB 설계 초안: `backend/schema.sql`
-- YouTube Data API 수집 스크립트: `scripts/fetch_youtube_videos.py`
+- Onboarding ocean talent DNA diagnosis
+- User profile storage: age group, interests, goals, level, and persona
+- Bronze/Silver/Gold/Platinum/Diamond tiers with XP gauge
+- Ocean video recommendations by difficulty: beginner/intermediate/advanced + recommended tier
+- Video completion handling and XP increase
+- Promotion quizzes: tier-based difficulty, answer explanations, and XP rewards
+- Educational program schedule recommendations
+- Event/movie/performance/experience recommendations
+- NCS-based career discovery: job roles, required competencies, and related workplaces
+- BluePath AI Agent: offline rule-based counseling
+- My Page: current tier, learning history, favorites, and profile reset
+- Initial database design: `backend/schema.sql`
+- YouTube Data API collection script: `scripts/fetch_youtube_videos.py`
 
-## 앱 구조
+## App Structure
 
 ```text
 app/src/main/java/com/bluepath/app
-├── MainActivity.java                  # 모든 화면을 구성하는 prototype Activity
-├── data/DataRepository.java           # seed 데이터: 영상, 교육, 이벤트, 진로, 퀴즈
-├── model/*.java                       # 데이터 모델
-├── storage/UserStore.java             # SharedPreferences 기반 유저 상태 저장
-└── util/RecommendationEngine.java     # 추천 점수, 페르소나, Agent 답변 로직
+├── MainActivity.java                  # Prototype Activity that builds all screens
+├── data/DataRepository.java           # Seed data: videos, education, events, careers, quizzes
+├── model/*.java                       # Data models
+├── storage/UserStore.java             # User state storage based on SharedPreferences
+└── util/RecommendationEngine.java     # Recommendation scoring, persona, and Agent response logic
 ```
 
-## 데이터 반영 내용
+## Reflected Data Concepts
 
-첨부 샘플데이터에서 다음 개념을 앱에 반영했습니다.
+The following concepts from the attached sample datasets were reflected in the app:
 
-- 국립해양박물관 교육 운영 데이터: 교육명, 대상, 시작/종료일, 참가방법, 교육내용
-- 국립해양박물관 교육행사 운영 데이터: 영화, 매직쇼, 음악회, 4D 체험 등 이벤트
-- 한국해양수산연수원 교육 과정 데이터: 해기사 면허취득, 기초안전교육 등 전문 과정
-- 해양기관 현황 데이터: 해운회사, 여객선사, 항만물류업체, 정부기관, 선급 등 근무지 유형
-- 해양직무 NCS 데이터: 선위결정, 항해당직, 선박조종, 항해장비운용, 비상대응 등 진로 역량
+- National Maritime Museum education operation data: program names, target audiences, start/end dates, participation methods, and educational content
+- National Maritime Museum education/event operation data: movies, magic shows, concerts, 4D experiences, and other events
+- Korea Institute of Maritime and Fisheries Technology course data: maritime officer license acquisition, basic safety training, and other professional courses
+- Maritime institution status data: shipping companies, passenger ferry operators, port logistics companies, government agencies, classification societies, and other workplace types
+- Maritime job NCS data: position fixing, navigation watchkeeping, ship handling, navigation equipment operation, emergency response, and other career competencies
 
-## 난도별 영상 seed
+## Video Seed Data by Difficulty
 
-YouTube 웹페이지 무단 스크래핑 대신, 공식·공공기관 채널 검색 결과 기반으로 seed를 구성했습니다.
+Instead of unauthorized scraping of YouTube web pages, the seed data was built based on search results from official and public institution channels.
 
-- 하: 어린이/유아/초등 대상 해양환경·해양생물·해양문화 영상
-- 중: 국립기관 교육 영상, 해양생물자원, 해양정화 활동, 박물관 탐방
-- 상: 방제대응센터, 해양환경 특강, 교육 플레이리스트 등 심화·직무형 콘텐츠
+- Beginner: videos for children, preschoolers, and elementary students about the marine environment, marine life, and maritime culture
+- Intermediate: educational videos from national institutions, marine bioresources, marine cleanup activities, and museum tours
+- Advanced: oil spill response centers, marine environment lectures, educational playlists, and other advanced or job-oriented content
 
-운영 단계에서는 `YOUTUBE_API_KEY`를 발급한 뒤 아래 명령으로 재수집할 수 있습니다.
+For production use, issue a `YOUTUBE_API_KEY` and run the following command to collect updated data:
 
 ```bash
 export YOUTUBE_API_KEY="YOUR_KEY"
 python scripts/fetch_youtube_videos.py
 ```
 
-## 실제 서비스화 시 권장 확장
+## Recommended Extensions for Production
 
-1. FastAPI/NestJS 백엔드 생성
-2. PostgreSQL + pgvector 또는 Supabase 연결
-3. 콘텐츠/교육/이벤트/퀴즈 관리자 대시보드 구현
-4. YouTube Data API, 기관 CSV/Excel 업로드 파이프라인 연결
-5. LLM API + RAG로 AI Agent 교체
-6. Firebase Cloud Messaging으로 교육 일정·시험·퀴즈 알림 추가
-7. 미성년자 보호자 동의, 개인정보 최소 수집, 로그 익명화 적용
+1. Build a FastAPI or NestJS backend.
+2. Connect PostgreSQL with pgvector, or use Supabase.
+3. Implement an admin dashboard for content, education programs, events, and quizzes.
+4. Connect YouTube Data API and institutional CSV/Excel upload pipelines.
+5. Replace the AI Agent with an LLM API + RAG architecture.
+6. Add Firebase Cloud Messaging for education schedules, exams, and quiz notifications.
+7. Apply guardian consent for minors, minimize personal data collection, and anonymize logs.
