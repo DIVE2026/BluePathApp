@@ -1,0 +1,15 @@
+[
+  {"id":"v-koem-01","title":"[어린이 교육] 나라와 누리의 해양환경 이야기 1: 바다가 아파요","source":"해양환경공단","url":"https://www.youtube.com/watch?v=d2p-_bOLuFc","difficulty":"하","requiredTier":"브론즈","topic":"해양환경","careerTag":"해양환경 교육","minutes":6},
+  {"id":"v-koem-02","title":"[어린이 교육] 나라와 누리의 해양환경 이야기 2: 지구가 더워지고 있어요","source":"해양환경공단","url":"https://www.youtube.com/watch?v=Vq_bja356o8","difficulty":"하","requiredTier":"브론즈","topic":"해양환경","careerTag":"해양환경 교육","minutes":6},
+  {"id":"v-koem-03","title":"[어린이 교육] 나라와 누리의 해양환경 이야기 3: 전 세계가 바다를 청소하고 있어요","source":"해양환경공단","url":"https://www.youtube.com/watch?v=N5EUkmslDzI","difficulty":"하","requiredTier":"브론즈","topic":"해양환경","careerTag":"해양환경 교육","minutes":6},
+  {"id":"v-mof-01","title":"아름다운 바다 속에 이렇게 많은 쓰레기가 있다고?","source":"해양수산부","url":"https://www.youtube.com/watch?v=TxZtHAJF3X4","difficulty":"하","requiredTier":"브론즈","topic":"해양환경","careerTag":"해양환경 교육","minutes":5},
+  {"id":"v-mof-02","title":"해랑이가 소개하는 유아 해양교육 놀이교재","source":"해양수산부/한국해양재단","url":"https://www.youtube.com/watch?v=Zs-yZH5CkrE","difficulty":"하","requiredTier":"브론즈","topic":"해양문화","careerTag":"해양교육 기획","minutes":5},
+  {"id":"v-mof-03","title":"해랑이가 초등학교에 간 이유는?! 바다친구들을 도와줘!","source":"해양수산부","url":"https://www.youtube.com/watch?v=gHGMXL0ve7I","difficulty":"하","requiredTier":"브론즈","topic":"해양생물","careerTag":"해양환경 교육","minutes":5},
+  {"id":"v-science-01","title":"국립해양과학관 온앤오프 교육: 해양정화활동과 업사이클링","source":"국립해양과학관","url":"https://www.youtube.com/watch?v=5k_kwf5B30Q","difficulty":"중","requiredTier":"실버","topic":"해양환경","careerTag":"해양환경 교육","minutes":12},
+  {"id":"v-mabik-01","title":"국립해양생물자원관 교육기부: 해양생명자원의 가치","source":"국립해양생물자원관","url":"https://www.youtube.com/watch?v=SARq0b_A7E8","difficulty":"중","requiredTier":"실버","topic":"해양생물","careerTag":"해양생태 해설","minutes":10},
+  {"id":"v-koem-04","title":"해양환경 지식나눔 온라인 라이브 특강 요약","source":"해양환경공단","url":"https://www.youtube.com/watch?v=xidKs9KNrOg","difficulty":"중","requiredTier":"실버","topic":"해양환경","careerTag":"해양환경 정책","minutes":18},
+  {"id":"v-inmm-01","title":"국립인천해양박물관 홍보영상 및 전시 탐방","source":"국립인천해양박물관","url":"https://www.youtube.com/@inmm_official","difficulty":"중","requiredTier":"실버","topic":"해양문화","careerTag":"전시·교육 기획","minutes":9},
+  {"id":"v-koem-05","title":"해양환경공단 방제대응센터 탐방","source":"해양환경공단","url":"https://www.youtube.com/watch?v=GzMBtdH4-bU","difficulty":"상","requiredTier":"골드","topic":"해양안전","careerTag":"방제·안전관리","minutes":15},
+  {"id":"v-playlist-01","title":"해양환경교육 영상 플레이리스트","source":"해양환경공단","url":"https://www.youtube.com/playlist?list=PL9uTkm0J3zA_tiQftfRkYmfenYeFK5wj-","difficulty":"상","requiredTier":"골드","topic":"해양환경","careerTag":"해양환경 정책","minutes":60},
+  {"id":"v-edu-01","title":"국립인천해양박물관 교육 프로그램 플레이리스트","source":"국립인천해양박물관","url":"https://www.youtube.com/playlist?list=PLvBo1qqlBWtxbwH7DyysyvoaoZoN_F_cU","difficulty":"상","requiredTier":"골드","topic":"해양문화","careerTag":"해양교육 기획","minutes":45}
+]
