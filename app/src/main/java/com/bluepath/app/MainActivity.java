@@ -209,7 +209,7 @@ public class MainActivity extends AppCompatActivity {
         addNavButton("일정", 3);
         addNavButton("진로", 4);
         addNavButton("AI", 5);
-        addNavButton("마이", 6);
+        addNavButton("MY", 6);
 
         renderTab(tab);
     }
