@@ -1,13 +1,16 @@
 package com.bluepath.app;
 
-import android.app.Activity;
 import android.app.AlertDialog;
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.CalendarContract;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -23,6 +26,9 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.ViewModelProvider;
+
 import com.bluepath.app.data.DataRepository;
 import com.bluepath.app.model.CareerItem;
 import com.bluepath.app.model.ContentItem;
@@ -32,18 +38,22 @@ import com.bluepath.app.model.QuizQuestion;
 import com.bluepath.app.model.UserProfile;
 import com.bluepath.app.storage.UserStore;
 import com.bluepath.app.util.MarineLlmClient;
+import com.bluepath.app.util.NotificationHelper;
 import com.bluepath.app.util.PromotionRules;
 import com.bluepath.app.util.RecommendationEngine;
 import com.bluepath.app.view.OceanGraphicView;
+import com.bluepath.app.viewmodel.BluePathViewModel;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class MainActivity extends Activity {
+public class MainActivity extends AppCompatActivity {
     private final int NAVY = Color.parseColor("#06223F");
     private final int OCEAN = Color.parseColor("#0E7490");
     private final int CYAN = Color.parseColor("#18D6D2");
@@ -55,6 +65,7 @@ public class MainActivity extends Activity {
 
     private UserStore store;
     private MarineLlmClient llmClient;
+    private BluePathViewModel viewModel;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private LinearLayout root;
     private LinearLayout content;
@@ -71,7 +82,7 @@ public class MainActivity extends Activity {
     private int quizCorrect = 0;
 
     private boolean agentLoading = false;
-    private String agentLastAnswer = "질문을 입력하면 해양 도메인 LLM이 학습·승급·진로 경로를 안내합니다.";
+    private String agentLastAnswer = "질문을 입력하면 해양 AI가 학습·승급·진로 경로를 안내합니다. 온라인 답변에는 근거 자료가 함께 표시됩니다.";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,7 +90,20 @@ public class MainActivity extends Activity {
         DataRepository.initialize(this);
         store = new UserStore(this);
         llmClient = new MarineLlmClient(store);
-        if (!store.hasProfile()) showOnboarding(); else showApp(0);
+        viewModel = new ViewModelProvider(this).get(BluePathViewModel.class);
+        viewModel.operation().observe(this, state -> {
+            if (state == null || "처리 중…".equals(state.message)) return;
+            toast(state.message);
+            if (!state.success || !store.hasProfile()) return;
+            if ("catalog".equals(state.type)) showApp(currentTab);
+            else showApp(6);
+        });
+        if (!store.hasProfile()) {
+            showOnboarding();
+        } else {
+            showApp(0);
+            if (store.hasCloudSession() && viewModel.isCloudConfigured()) viewModel.refreshCatalog();
+        }
     }
 
     @Override
@@ -102,7 +126,7 @@ public class MainActivity extends Activity {
 
         TextView title = title("BluePath\n스마트 해도 AI");
         root.addView(title);
-        root.addView(body("해양 콘텐츠, LLM 승급 퀴즈, NCS 진로 로드맵을 하나의 항해 경로로 연결합니다. 먼저 나에게 맞는 해양 인재 프로필을 설정하세요."));
+        root.addView(body("해양 콘텐츠, AI 승급 퀴즈, NCS 진로 로드맵을 하나의 항해 경로로 연결합니다. 먼저 나에게 맞는 해양 인재 프로필을 설정하세요."));
 
         Spinner age = spinner(new String[]{"초등학생", "중학생", "고등학생", "대학생", "성인", "직장인", "학부모/가족"});
         Spinner interest = spinner(new String[]{"해양환경", "해양생물", "항해", "선박", "독도·해양문화", "해양안전", "항만·물류"});
@@ -121,7 +145,7 @@ public class MainActivity extends Activity {
             String g = goal.getSelectedItem().toString();
             String l = level.getSelectedItem().toString();
             store.saveProfile(new UserProfile(a, i, g, l, RecommendationEngine.persona(a, g, i), 0));
-            showApp(0);
+            if (store.requiresGuardianConsent()) showGuardianConsentDialog(true); else showApp(0);
         });
         LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(-1, dp(52));
         startParams.setMargins(0, dp(18), 0, 0);
@@ -151,7 +175,7 @@ public class MainActivity extends Activity {
         h.setTypeface(Typeface.DEFAULT_BOLD);
         brand.addView(h);
         TextView sub = new TextView(this);
-        sub.setText("해양 학습 · LLM 퀴즈 · 커리어 항해");
+        sub.setText("해양 학습 · AI 퀴즈 · 커리어 항해");
         sub.setTextColor(Color.parseColor("#C9FFFF"));
         sub.setTextSize(12);
         sub.setPadding(0, dp(3), 0, 0);
@@ -297,13 +321,13 @@ public class MainActivity extends Activity {
 
     private void renderQuiz() {
         String currentTier = store.getTier();
-        content.addView(sectionTitle("LLM 승급 퀴즈"));
+        content.addView(sectionTitle("AI 승급 퀴즈"));
         content.addView(body("현재 통합 티어: " + PromotionRules.displayName(currentTier) + " · " + PromotionRules.quizRule(currentTier)));
 
         if (PromotionRules.questionCount(currentTier) == 0 && activeQuiz.isEmpty()) {
             LinearLayout card = card();
-            card.addView(big("퀴즈 단독 승급 구간을 완료했습니다."));
-            card.addView(body("플래티넘 이후에는 기존 XP 기준과 자격·교육·경력 인증 로드맵을 활용합니다. 우측 상단 ‘승급 기준’에서 전체 매뉴얼을 확인하세요."));
+            card.addView(big("모든 승급 항로를 완료했습니다."));
+            card.addView(body("💎 다이아 티어를 달성했습니다. 해양 학습 기록, 프로젝트와 진로 로드맵을 계속 확장해 보세요."));
             Button manual = outlineButton("전체 승급 매뉴얼 보기");
             manual.setOnClickListener(v -> showPromotionManual());
             card.addView(manual);
@@ -315,8 +339,8 @@ public class MainActivity extends Activity {
             LinearLayout loading = card();
             loading.addView(big("해양 도메인 문제를 생성하고 있습니다"));
             loading.addView(body(llmClient.isConfigured()
-                    ? "설정된 LLM 모델이 영상 주제와 현재 프로필을 바탕으로 4지선다 문제를 구성합니다."
-                    : "LLM 설정이 없어 검증된 해양 도메인 로컬 문제은행을 준비합니다."));
+                    ? "보안 서버의 해양 AI가 영상 주제와 현재 프로필을 바탕으로 4지선다 문제를 구성합니다."
+                    : "오프라인에서도 사용할 수 있는 검증된 해양 문제은행을 준비합니다."));
             ProgressBar progress = new ProgressBar(this);
             loading.addView(progress);
             content.addView(loading);
@@ -330,9 +354,9 @@ public class MainActivity extends Activity {
             startCard.addView(big(PromotionRules.displayTransition(currentTier)));
             startCard.addView(body(total + "문제 · 합격선 " + pass + "문제 · 전 문항 4지선다"));
             startCard.addView(body(llmClient.isConfigured()
-                    ? "LLM 연결됨: " + store.getLlmModel()
-                    : "LLM 미설정: 마이페이지에서 endpoint/model을 설정할 수 있으며, 지금은 해양 특화 로컬 문제은행으로 동작합니다."));
-            Button generate = primaryButton(llmClient.isConfigured() ? "LLM 퀴즈 생성" : "해양 퀴즈 시작");
+                    ? "BluePath 해양 AI가 공공·기관 자료를 검색해 근거 기반 문제를 생성합니다."
+                    : "연결이 어려운 상황에서도 해양 특화 로컬 문제은행으로 학습할 수 있습니다."));
+            Button generate = primaryButton(llmClient.isConfigured() ? "AI 퀴즈 생성" : "해양 퀴즈 시작");
             generate.setOnClickListener(v -> generateQuizForCurrentTier());
             startCard.addView(generate, new LinearLayout.LayoutParams(-1, dp(48)));
             content.addView(startCard);
@@ -381,7 +405,7 @@ public class MainActivity extends Activity {
             if (llmClient.isConfigured()) {
                 try {
                     generated = llmClient.generateQuiz(tier, store.getProfile(), DataRepository.contents());
-                    source = "해양 특화 LLM · " + store.getLlmModel();
+                    source = "BluePath Marine AI + RAG";
                 } catch (Exception e) {
                     generated = RecommendationEngine.quizForTier(tier, store.getProfile().interest);
                     source = "검증된 해양 로컬 문제은행";
@@ -390,7 +414,7 @@ public class MainActivity extends Activity {
             } else {
                 generated = RecommendationEngine.quizForTier(tier, store.getProfile().interest);
                 source = "검증된 해양 로컬 문제은행";
-                notice = "실제 LLM 생성을 사용하려면 마이페이지에서 OpenAI-compatible endpoint와 fine-tuned model ID를 설정하세요.";
+                notice = "현재는 검증된 오프라인 문제은행을 사용합니다. AI 학습 기능을 이용할 수 있을 때는 근거 기반 문제 생성이 자동으로 적용됩니다.";
             }
 
             final List<QuizQuestion> result = generated;
@@ -404,7 +428,9 @@ public class MainActivity extends Activity {
                 quizSource = finalSource;
                 quizNotice = finalNotice;
                 if (activeQuiz.size() != PromotionRules.questionCount(tier)) {
-                    quizNotice = "문제 수를 충족하지 못했습니다. 마이페이지 설정 또는 fallback_quizzes.json을 확인하세요.";
+                    activeQuiz.clear();
+                    selectedAnswers = new int[0];
+                    quizNotice = "필요한 문제 수를 충족하지 못해 세션을 시작하지 않았습니다. 다시 생성해 주세요.";
                 }
                 showApp(2);
             });
@@ -460,6 +486,8 @@ public class MainActivity extends Activity {
         quizCorrect = correct;
         boolean passed = correct >= PromotionRules.passCount(quizAttemptTier);
         store.recordQuizAttempt(quizAttemptTier, correct, activeQuiz.size(), passed, quizSource);
+        viewModel.recordLearning("quiz", quizAttemptTier, PromotionRules.displayName(quizAttemptTier),
+                correct + "/" + activeQuiz.size() + (passed ? " passed" : " retry"));
         store.addXp(passed ? 300 : 80);
         if (passed) store.promoteByQuiz(quizAttemptTier);
         quizSubmitted = true;
@@ -474,10 +502,17 @@ public class MainActivity extends Activity {
         result.addView(big(passed ? "🎉 승급 기준 통과" : "🌊 다시 항해할 준비"));
         result.addView(huge(score + "점"));
         result.addView(body(quizCorrect + " / " + total + " 정답 · 합격선 " + PromotionRules.passCount(quizAttemptTier) + "문제"));
-        result.addView(note(passed
-                ? PromotionRules.displayName(quizAttemptTier) + "에서 " + PromotionRules.displayName(PromotionRules.nextTier(quizAttemptTier)) + "로 승급했습니다. 현재 통합 티어: " + PromotionRules.displayName(store.getTier())
-                : "합격까지 " + Math.max(0, PromotionRules.passCount(quizAttemptTier) - quizCorrect) + "문제가 더 필요합니다.",
-                passed ? SUCCESS : DANGER));
+        String passMessage;
+        if (passed && "플래티넘".equals(quizAttemptTier)) {
+            passMessage = "다이아 고급 퀴즈를 통과했습니다. 마이페이지에서 자격 증빙과 해양 프로젝트를 제출해 인증 항로를 완성하세요.";
+        } else if (passed) {
+            passMessage = PromotionRules.displayName(quizAttemptTier) + "에서 "
+                    + PromotionRules.displayName(PromotionRules.nextTier(quizAttemptTier))
+                    + "로 승급했습니다. 현재 통합 티어: " + PromotionRules.displayName(store.getTier());
+        } else {
+            passMessage = "합격까지 " + Math.max(0, PromotionRules.passCount(quizAttemptTier) - quizCorrect) + "문제가 더 필요합니다.";
+        }
+        result.addView(note(passMessage, passed ? SUCCESS : DANGER));
         result.addView(body("아래에서 각 문항의 내 답, 정답, 해설을 확인할 수 있습니다."));
         content.addView(result);
     }
@@ -514,8 +549,8 @@ public class MainActivity extends Activity {
         String tier = store.getTier();
         content.addView(sectionTitle("BluePath Marine AI Agent"));
         content.addView(body(llmClient.isConfigured()
-                ? "해양 도메인 모델 ‘" + store.getLlmModel() + "’에 연결되어 있습니다. 프로필·승급 기준·추천 영상을 문맥으로 제공합니다."
-                : "LLM endpoint가 설정되지 않아 현재는 로컬 해양 상담 엔진으로 응답합니다. 마이페이지에서 fine-tuned model endpoint를 연결할 수 있습니다."));
+                ? "보안 서버의 해양 AI가 사용자 프로필, 승급 기준, 추천 콘텐츠, 기관 자료를 함께 검색해 출처가 있는 답변을 제공합니다."
+                : "오프라인 해양 상담 엔진으로도 학습·승급·진로 질문에 답할 수 있습니다."));
 
         EditText input = new EditText(this);
         input.setHint("예: 골드 승급을 위해 무엇을 공부해야 해?");
@@ -532,7 +567,7 @@ public class MainActivity extends Activity {
         content.addView(ask, askParams);
 
         LinearLayout answerCard = card();
-        answerCard.addView(label(llmClient.isConfigured() ? "LLM RESPONSE" : "LOCAL FALLBACK RESPONSE"));
+        answerCard.addView(label(llmClient.isConfigured() ? "MARINE AI · SOURCED RESPONSE" : "OFFLINE MARINE GUIDE"));
         if (agentLoading) {
             answerCard.addView(big("답변을 구성하고 있습니다"));
             answerCard.addView(new ProgressBar(this));
@@ -623,7 +658,8 @@ public class MainActivity extends Activity {
         report.addView(body("최근 퀴즈: " + store.getLastQuizSummary()));
         report.addView(body(PromotionRules.displayName("브론즈") + " 최고 " + store.getBestQuizScore("브론즈") + "/10 · "
                 + PromotionRules.displayName("실버") + " 최고 " + store.getBestQuizScore("실버") + "/12 · "
-                + PromotionRules.displayName("골드") + " 최고 " + store.getBestQuizScore("골드") + "/15"));
+                + PromotionRules.displayName("골드") + " 최고 " + store.getBestQuizScore("골드") + "/15 · "
+                + PromotionRules.displayName("플래티넘") + " 고급 " + store.getBestQuizScore("플래티넘") + "/20"));
         Button manual = outlineButton("승급 기준 전체 보기");
         manual.setOnClickListener(v -> showPromotionManual());
         report.addView(manual);
@@ -655,40 +691,118 @@ public class MainActivity extends Activity {
             String l = level.getSelectedItem().toString();
             store.saveProfile(new UserProfile(a, i, g, l, RecommendationEngine.persona(a, g, i), p.xp));
             toast("프로필을 저장했습니다.");
-            showApp(6);
+            if (store.requiresGuardianConsent() && !store.hasGuardianConsent()) showGuardianConsentDialog(false);
+            else showApp(6);
         });
         editCard.addView(saveProfile, new LinearLayout.LayoutParams(-1, dp(48)));
         content.addView(editCard);
 
-        content.addView(sectionTitle("Marine LLM 연결 설정"));
-        LinearLayout llmCard = card();
-        llmCard.addView(body("API 키를 앱에 직접 넣는 방식은 프로토타입용입니다. 상용 배포에서는 서버 프록시와 사용자 인증을 사용하세요."));
-        EditText endpoint = inputField("예: https://your-llm-gateway.example.com", store.getLlmEndpoint());
-        EditText model = inputField("fine-tuned model ID", store.getLlmModel());
-        EditText apiKey = inputField("API key (선택)", store.getLlmApiKey());
-        apiKey.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        llmCard.addView(label("OpenAI-compatible endpoint")); llmCard.addView(endpoint);
-        llmCard.addView(label("해양 파인튜닝 모델 ID")); llmCard.addView(model);
-        llmCard.addView(label("Bearer API key")); llmCard.addView(apiKey);
-        Button saveLlm = primaryButton("LLM 설정 저장");
-        saveLlm.setOnClickListener(v -> {
-            store.saveLlmConfig(endpoint.getText().toString(), model.getText().toString(), apiKey.getText().toString());
-            toast(store.hasLlmConfig() ? "해양 LLM 연결 설정을 저장했습니다." : "endpoint가 비어 있어 로컬 fallback으로 동작합니다.");
-            showApp(6);
-        });
-        llmCard.addView(saveLlm, new LinearLayout.LayoutParams(-1, dp(48)));
-        llmCard.addView(body("파인튜닝 학습 자료: assets/marine_finetune_dataset.jsonl · 권장 모델명: bluepath-marine-ft-v1"));
-        content.addView(llmCard);
+        content.addView(sectionTitle("계정과 클라우드 백업"));
+        LinearLayout cloudCard = card();
+        if (store.hasCloudSession()) {
+            cloudCard.addView(big("☁️ " + store.getAccountDisplayName()));
+            cloudCard.addView(body(store.getAccountEmail()));
+            cloudCard.addView(body("마지막 동기화: " + store.getLastSyncAt()));
+            Button sync = primaryButton("학습 기록 지금 동기화");
+            sync.setOnClickListener(v -> viewModel.syncNow());
+            cloudCard.addView(sync, new LinearLayout.LayoutParams(-1, dp(48)));
+            Button catalog = outlineButton("최신 학습 자료 불러오기");
+            catalog.setOnClickListener(v -> viewModel.refreshCatalog());
+            cloudCard.addView(catalog);
+            Button logout = outlineButton("로그아웃");
+            logout.setOnClickListener(v -> viewModel.logout());
+            cloudCard.addView(logout);
+        } else {
+            cloudCard.addView(big("기기 변경에도 학습 기록을 이어가세요"));
+            cloudCard.addView(body(viewModel.isCloudConfigured()
+                    ? "계정을 만들면 완료 영상, 찜, 퀴즈 기록, 다이아 인증 진행 상태를 안전하게 동기화할 수 있습니다."
+                    : "현재는 기기 안에 기록이 저장됩니다. 영상 학습, 퀴즈, 추천, 진로 탐색은 그대로 이용할 수 있습니다."));
+            if (viewModel.isCloudConfigured()) {
+                Button create = primaryButton("계정 만들기");
+                create.setOnClickListener(v -> showAccountDialog(true));
+                cloudCard.addView(create, new LinearLayout.LayoutParams(-1, dp(48)));
+                Button login = outlineButton("로그인");
+                login.setOnClickListener(v -> showAccountDialog(false));
+                cloudCard.addView(login);
+            }
+        }
+        content.addView(cloudCard);
 
-        content.addView(sectionTitle("계정·앱 관리"));
+        content.addView(sectionTitle("학습 알림과 캘린더"));
+        LinearLayout reminderCard = card();
+        reminderCard.addView(big(store.isReminderEnabled()
+                ? "🔔 매일 " + String.format(Locale.KOREA, "%02d:%02d", store.getReminderHour(), store.getReminderMinute())
+                : "🔕 학습 알림 꺼짐"));
+        reminderCard.addView(body("추천 영상, 승급 퀴즈, 찜한 교육 일정을 놓치지 않도록 원하는 시간에 알려드립니다."));
+        Button reminder = primaryButton(store.isReminderEnabled() ? "알림 시간 변경" : "매일 학습 알림 켜기");
+        reminder.setOnClickListener(v -> showReminderTimePicker());
+        reminderCard.addView(reminder, new LinearLayout.LayoutParams(-1, dp(48)));
+        Button examReminder = outlineButton("시험·자격 일정 추가");
+        examReminder.setOnClickListener(v -> showExamReminderDialog());
+        reminderCard.addView(examReminder);
+        if (store.isReminderEnabled()) {
+            Button disableReminder = outlineButton("학습 알림 끄기");
+            disableReminder.setOnClickListener(v -> {
+                NotificationHelper.cancelDaily(this);
+                store.setReminderEnabled(false, store.getReminderHour(), store.getReminderMinute());
+                toast("학습 알림을 껐습니다.");
+                showApp(6);
+            });
+            reminderCard.addView(disableReminder);
+        }
+        content.addView(reminderCard);
+
+        content.addView(sectionTitle("💎 다이아 인증 항로"));
+        LinearLayout diamondCard = card();
+        diamondCard.addView(big("고급 퀴즈 · 자격 증빙 · 해양 프로젝트"));
+        diamondCard.addView(body("세 항목을 모두 완료하고 검토 승인을 받으면 다이아 인증 항로가 완성됩니다."));
+        diamondCard.addView(note("고급 퀴즈 16/20: " + statusLabel(store.isDiamondAdvancedQuizPassed() ? "approved" : "not_submitted"),
+                store.isDiamondAdvancedQuizPassed() ? SUCCESS : MUTED));
+        diamondCard.addView(note("자격 증빙: " + statusLabel(store.getCertificationStatus()), statusColor(store.getCertificationStatus())));
+        diamondCard.addView(note("해양 프로젝트: " + statusLabel(store.getProjectStatus()), statusColor(store.getProjectStatus())));
+        if (PromotionRules.rank(tier) >= PromotionRules.rank("플래티넘")) {
+            Button certification = outlineButton("자격 증빙 제출");
+            certification.setOnClickListener(v -> showDiamondEvidenceDialog("certification"));
+            diamondCard.addView(certification);
+            Button project = outlineButton("해양 프로젝트 제출");
+            project.setOnClickListener(v -> showDiamondEvidenceDialog("project"));
+            diamondCard.addView(project);
+            if (store.hasCloudSession()) {
+                Button refresh = primaryButton("검토 상태 새로고침");
+                refresh.setOnClickListener(v -> viewModel.refreshDiamondStatus());
+                diamondCard.addView(refresh, new LinearLayout.LayoutParams(-1, dp(48)));
+            }
+        } else {
+            diamondCard.addView(body("플래티넘에 도달하면 고급 퀴즈와 증빙 제출 메뉴가 활성화됩니다."));
+        }
+        content.addView(diamondCard);
+
+        content.addView(sectionTitle("개인정보와 보호자 동의"));
+        LinearLayout privacyCard = card();
+        privacyCard.addView(big(store.requiresGuardianConsent()
+                ? (store.hasGuardianConsent() ? "🛡️ 보호자 동의 완료" : "🛡️ 보호자 동의 필요")
+                : "🛡️ 개인정보 보호"));
+        privacyCard.addView(body("BluePath는 학습 추천에 필요한 최소 프로필만 사용하며, 계정 동기화를 선택하지 않으면 학습 기록은 기기에 보관됩니다."));
+        if (store.requiresGuardianConsent()) {
+            Button consent = outlineButton(store.hasGuardianConsent() ? "보호자 동의 정보 확인" : "보호자 동의 진행");
+            consent.setOnClickListener(v -> showGuardianConsentDialog(false));
+            privacyCard.addView(consent);
+        }
+        Button privacy = outlineButton("개인정보 안내 보기");
+        privacy.setOnClickListener(v -> showPrivacyNotice());
+        privacyCard.addView(privacy);
+        content.addView(privacyCard);
+
+        content.addView(sectionTitle("앱 관리"));
         LinearLayout account = card();
-        account.addView(body("BluePath prototype · 로컬 프로필 저장 · YouTube 외부 링크 사용"));
+        account.addView(body("학습 기록을 초기화하면 이 기기에 저장된 프로필, XP, 티어, 퀴즈 결과와 찜 목록이 삭제됩니다."));
         Button reset = outlineButton("프로필과 학습 기록 초기화");
         reset.setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle("모든 기록을 초기화할까요?")
-                .setMessage("프로필, XP, 승급 티어, 퀴즈 기록, 찜, LLM 설정이 삭제됩니다.")
+                .setMessage("프로필, XP, 승급 티어, 퀴즈 기록, 찜, 동기화 정보가 삭제됩니다.")
                 .setNegativeButton("취소", null)
                 .setPositiveButton("초기화", (dialog, which) -> {
+                    NotificationHelper.cancelDaily(this);
                     store.reset();
                     clearQuizSession();
                     showOnboarding();
@@ -739,12 +853,14 @@ public class MainActivity extends Activity {
             if (!store.getCompletedContentIds().contains(item.id)) {
                 store.markCompleted(item.id);
                 store.addXp(item.difficulty.equals("하") ? 80 : item.difficulty.equals("중") ? 120 : 180);
+                viewModel.recordLearning("video", item.id, item.title, "completed");
             }
             openUrl(item.url);
         });
         Button save = outlineButton(store.isBookmarked(item.id) ? "찜 해제" : "찜");
         save.setOnClickListener(v -> {
             store.toggleBookmark(item.id);
+            viewModel.recordLearning("bookmark", item.id, item.title, store.isBookmarked(item.id) ? "saved" : "removed");
             toast(store.isBookmarked(item.id) ? "찜 목록에 저장했습니다." : "찜을 해제했습니다.");
             showApp(currentTab);
         });
@@ -769,10 +885,14 @@ public class MainActivity extends Activity {
         Button b = outlineButton(store.isBookmarked(item.id) ? "일정 찜 해제" : "일정 찜하기");
         b.setOnClickListener(v -> {
             store.toggleBookmark(item.id);
+            viewModel.recordLearning("program", item.id, item.title, store.isBookmarked(item.id) ? "saved" : "removed");
             toast("일정 찜 목록을 업데이트했습니다.");
             showApp(currentTab);
         });
         card.addView(b);
+        Button calendar = outlineButton("내 캘린더에 추가");
+        calendar.setOnClickListener(v -> addProgramToCalendar(item));
+        card.addView(calendar);
         content.addView(card);
     }
 
@@ -805,6 +925,204 @@ public class MainActivity extends Activity {
         card.addView(body(join(item.workplaces, ", ")));
         card.addView(body("추천 로드맵: 관련 영상 학습 → 승급 퀴즈 → 교육 일정 찜 → NCS 역량 강화 → 자격·현장 경험"));
         content.addView(card);
+    }
+
+    private void showAccountDialog(boolean createAccount) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), 0);
+        EditText email = inputField("email@example.com", store.getAccountEmail());
+        EditText password = inputField("8자 이상 비밀번호", "");
+        password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        form.addView(label("이메일"));
+        form.addView(email);
+        form.addView(label("비밀번호"));
+        form.addView(password);
+        EditText guardianEmail = null;
+        if (createAccount && store.requiresGuardianConsent()) {
+            guardianEmail = inputField("보호자 이메일", store.getGuardianEmail());
+            form.addView(label("보호자 이메일"));
+            form.addView(guardianEmail);
+        }
+        final EditText guardian = guardianEmail;
+        new AlertDialog.Builder(this)
+                .setTitle(createAccount ? "BluePath 계정 만들기" : "BluePath 로그인")
+                .setView(form)
+                .setNegativeButton("취소", null)
+                .setPositiveButton(createAccount ? "계정 만들기" : "로그인", (dialog, which) -> {
+                    String emailValue = email.getText().toString().trim();
+                    String passwordValue = password.getText().toString();
+                    if (emailValue.isEmpty() || passwordValue.length() < 8) {
+                        toast("이메일과 8자 이상의 비밀번호를 입력해 주세요.");
+                        return;
+                    }
+                    if (createAccount) {
+                        String guardianValue = guardian == null ? "" : guardian.getText().toString().trim();
+                        viewModel.register(emailValue, passwordValue, guardianValue);
+                    } else {
+                        viewModel.login(emailValue, passwordValue);
+                    }
+                }).show();
+    }
+
+    private void showGuardianConsentDialog(boolean onboarding) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), 0);
+        TextView notice = body("보호자는 연령대·관심 분야·학습 목표와 학습 기록이 맞춤 추천에 사용되는 것에 동의합니다. 계정을 만들지 않으면 기록은 이 기기에만 저장됩니다.");
+        EditText guardianEmail = inputField("보호자 이메일", store.getGuardianEmail());
+        form.addView(notice);
+        form.addView(label("보호자 이메일"));
+        form.addView(guardianEmail);
+        new AlertDialog.Builder(this)
+                .setTitle("보호자 동의")
+                .setView(form)
+                .setCancelable(!onboarding)
+                .setNegativeButton("동의하지 않음", (dialog, which) -> {
+                    store.saveGuardianConsent(false, "");
+                    showApp(onboarding ? 0 : 6);
+                })
+                .setPositiveButton("동의하고 계속", (dialog, which) -> {
+                    String email = guardianEmail.getText().toString().trim();
+                    if (email.isEmpty()) {
+                        toast("보호자 이메일을 입력해 주세요.");
+                        showApp(onboarding ? 0 : 6);
+                        return;
+                    }
+                    store.saveGuardianConsent(true, email);
+                    toast("보호자 동의 정보를 저장했습니다.");
+                    showApp(onboarding ? 0 : 6);
+                }).show();
+    }
+
+    private void showReminderTimePicker() {
+        new android.app.TimePickerDialog(this, (view, hourOfDay, minute) -> {
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2401);
+            }
+            NotificationHelper.scheduleDaily(this, hourOfDay, minute);
+            store.setReminderEnabled(true, hourOfDay, minute);
+            toast(String.format(Locale.KOREA, "매일 %02d:%02d에 알려드릴게요.", hourOfDay, minute));
+            showApp(6);
+        }, store.getReminderHour(), store.getReminderMinute(), true).show();
+    }
+
+    private void showDiamondEvidenceDialog(String type) {
+        if (!store.hasCloudSession()) {
+            toast("증빙 검토를 받으려면 먼저 로그인해 주세요.");
+            if (viewModel.isCloudConfigured()) showAccountDialog(false);
+            return;
+        }
+        boolean certification = "certification".equals(type);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), 0);
+        EditText title = inputField(certification ? "자격·교육 과정명" : "프로젝트 제목", "");
+        EditText url = inputField("확인 가능한 링크", "");
+        form.addView(label(certification ? "자격 또는 수료 내용" : "해양 프로젝트"));
+        form.addView(title);
+        form.addView(label("증빙 링크"));
+        form.addView(url);
+        new AlertDialog.Builder(this)
+                .setTitle(certification ? "자격 증빙 제출" : "해양 프로젝트 제출")
+                .setView(form)
+                .setNegativeButton("취소", null)
+                .setPositiveButton("검토 요청", (dialog, which) -> {
+                    String titleValue = title.getText().toString().trim();
+                    String urlValue = url.getText().toString().trim();
+                    if (titleValue.isEmpty() || urlValue.isEmpty()) {
+                        toast("제목과 증빙 링크를 모두 입력해 주세요.");
+                        return;
+                    }
+                    viewModel.submitDiamondEvidence(type, titleValue, urlValue);
+                }).show();
+    }
+
+    private void showExamReminderDialog() {
+        EditText title = inputField("예: 해기사 시험 접수 마감", "");
+        new AlertDialog.Builder(this)
+                .setTitle("시험·자격 일정")
+                .setMessage("일정 이름을 입력한 뒤 날짜와 시간을 선택하세요. 기기 캘린더와 알림에 함께 등록됩니다.")
+                .setView(title)
+                .setNegativeButton("취소", null)
+                .setPositiveButton("날짜 선택", (dialog, which) -> {
+                    String value = title.getText().toString().trim();
+                    if (value.isEmpty()) {
+                        toast("일정 이름을 입력해 주세요.");
+                        return;
+                    }
+                    Calendar selected = Calendar.getInstance();
+                    new android.app.DatePickerDialog(this, (dateView, year, month, day) -> {
+                        selected.set(year, month, day);
+                        new android.app.TimePickerDialog(this, (timeView, hour, minute) -> {
+                            selected.set(Calendar.HOUR_OF_DAY, hour);
+                            selected.set(Calendar.MINUTE, minute);
+                            selected.set(Calendar.SECOND, 0);
+                            if (selected.getTimeInMillis() <= System.currentTimeMillis()) {
+                                toast("현재 이후의 일정을 선택해 주세요.");
+                                return;
+                            }
+                            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2402);
+                            }
+                            NotificationHelper.scheduleOneTime(this, value, selected.getTimeInMillis());
+                            try {
+                                Intent intent = new Intent(Intent.ACTION_INSERT)
+                                        .setData(CalendarContract.Events.CONTENT_URI)
+                                        .putExtra(CalendarContract.Events.TITLE, value)
+                                        .putExtra(CalendarContract.Events.DESCRIPTION, "BluePath 해양 학습·시험 일정")
+                                        .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, selected.getTimeInMillis())
+                                        .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, selected.getTimeInMillis() + 60 * 60 * 1000L);
+                                startActivity(intent);
+                            } catch (Exception ignored) {
+                                toast("알림은 등록했지만 캘린더 앱을 열 수 없습니다.");
+                            }
+                        }, selected.get(Calendar.HOUR_OF_DAY), selected.get(Calendar.MINUTE), true).show();
+                    }, selected.get(Calendar.YEAR), selected.get(Calendar.MONTH), selected.get(Calendar.DAY_OF_MONTH)).show();
+                }).show();
+    }
+
+    private void addProgramToCalendar(ProgramItem item) {
+        try {
+            String[] startParts = item.startDate.split("-");
+            String[] endParts = item.endDate.split("-");
+            Calendar start = Calendar.getInstance();
+            start.set(Integer.parseInt(startParts[0]), Integer.parseInt(startParts[1]) - 1,
+                    Integer.parseInt(startParts[2]), 9, 0, 0);
+            Calendar end = Calendar.getInstance();
+            end.set(Integer.parseInt(endParts[0]), Integer.parseInt(endParts[1]) - 1,
+                    Integer.parseInt(endParts[2]), 18, 0, 0);
+            Intent intent = new Intent(Intent.ACTION_INSERT)
+                    .setData(CalendarContract.Events.CONTENT_URI)
+                    .putExtra(CalendarContract.Events.TITLE, item.title)
+                    .putExtra(CalendarContract.Events.DESCRIPTION, item.description)
+                    .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start.getTimeInMillis())
+                    .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end.getTimeInMillis());
+            startActivity(intent);
+        } catch (Exception e) {
+            toast("이 일정의 날짜를 캘린더에 추가할 수 없습니다.");
+        }
+    }
+
+    private void showPrivacyNotice() {
+        new AlertDialog.Builder(this)
+                .setTitle("BluePath 개인정보 안내")
+                .setMessage("맞춤 추천을 위해 연령대, 관심 분야, 학습 목표, 수준, 학습 완료와 퀴즈 기록을 사용합니다. 계정 동기화는 선택 사항이며, 로그아웃하거나 계정을 만들지 않은 경우 기록은 기기에 저장됩니다. 미성년 사용자는 보호자 동의를 관리할 수 있습니다.")
+                .setPositiveButton("확인", null)
+                .show();
+    }
+
+    private String statusLabel(String status) {
+        if ("approved".equals(status)) return "승인 완료";
+        if ("pending".equals(status)) return "검토 중";
+        if ("rejected".equals(status)) return "보완 필요";
+        return "미제출";
+    }
+
+    private int statusColor(String status) {
+        if ("approved".equals(status)) return SUCCESS;
+        if ("rejected".equals(status)) return DANGER;
+        return MUTED;
     }
 
     private void showPromotionManual() {
