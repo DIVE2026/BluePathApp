@@ -1,5 +1,8 @@
 <resources>
     <color name="bluepath_navy">#06223F</color>
+    <color name="bluepath_ocean">#0E7490</color>
     <color name="bluepath_cyan">#18D6D2</color>
-    <color name="bluepath_bg">#F3FAFA</color>
+    <color name="bluepath_bg">#F2FAFB</color>
+    <color name="bluepath_text">#17324D</color>
+    <color name="bluepath_muted">#64748B</color>
 </resources>
