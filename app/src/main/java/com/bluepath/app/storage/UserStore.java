@@ -4,8 +4,12 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import com.bluepath.app.model.UserProfile;
+import com.bluepath.app.util.PromotionRules;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 public class UserStore {
@@ -51,7 +55,23 @@ public class UserStore {
     }
 
     public String getTier() {
+        String xpTier = tierForXp(prefs.getInt("xp", 0));
+        String quizTier = PromotionRules.tierForRank(prefs.getInt("quizTierRank", 1));
+        return PromotionRules.rank(xpTier) >= PromotionRules.rank(quizTier) ? xpTier : quizTier;
+    }
+
+    public String getXpTier() {
         return tierForXp(prefs.getInt("xp", 0));
+    }
+
+    public String getQuizTier() {
+        return PromotionRules.tierForRank(prefs.getInt("quizTierRank", 1));
+    }
+
+    public void promoteByQuiz(String fromTier) {
+        int targetRank = PromotionRules.rank(PromotionRules.nextTier(fromTier));
+        int currentRank = prefs.getInt("quizTierRank", 1);
+        if (targetRank > currentRank) prefs.edit().putInt("quizTierRank", targetRank).apply();
     }
 
     public static String tierForXp(int xp) {
@@ -96,10 +116,63 @@ public class UserStore {
         return new HashSet<>(prefs.getStringSet("bookmarks", new HashSet<String>()));
     }
 
+    public boolean isBookmarked(String id) {
+        return getBookmarks().contains(id);
+    }
+
     public void toggleBookmark(String id) {
         Set<String> ids = getBookmarks();
         if (ids.contains(id)) ids.remove(id); else ids.add(id);
         prefs.edit().putStringSet("bookmarks", ids).apply();
+    }
+
+    public void recordQuizAttempt(String tier, int correct, int total, boolean passed, String source) {
+        int attempts = prefs.getInt("quizAttempts", 0) + 1;
+        int best = Math.max(correct, prefs.getInt("bestQuiz_" + tier, 0));
+        String date = new SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).format(new Date());
+        String summary = date + " · " + PromotionRules.displayName(tier) + " " + correct + "/" + total + " · "
+                + (passed ? "합격" : "재도전") + " · " + source;
+        prefs.edit()
+                .putInt("quizAttempts", attempts)
+                .putInt("bestQuiz_" + tier, best)
+                .putString("lastQuizSummary", summary)
+                .apply();
+    }
+
+    public int getQuizAttempts() {
+        return prefs.getInt("quizAttempts", 0);
+    }
+
+    public int getBestQuizScore(String tier) {
+        return prefs.getInt("bestQuiz_" + tier, 0);
+    }
+
+    public String getLastQuizSummary() {
+        return prefs.getString("lastQuizSummary", "아직 응시 기록이 없습니다.");
+    }
+
+    public void saveLlmConfig(String endpoint, String model, String apiKey) {
+        prefs.edit()
+                .putString("llmEndpoint", endpoint == null ? "" : endpoint.trim())
+                .putString("llmModel", model == null ? "" : model.trim())
+                .putString("llmApiKey", apiKey == null ? "" : apiKey.trim())
+                .apply();
+    }
+
+    public String getLlmEndpoint() {
+        return prefs.getString("llmEndpoint", "");
+    }
+
+    public String getLlmModel() {
+        return prefs.getString("llmModel", "bluepath-marine-ft-v1");
+    }
+
+    public String getLlmApiKey() {
+        return prefs.getString("llmApiKey", "");
+    }
+
+    public boolean hasLlmConfig() {
+        return !getLlmEndpoint().trim().isEmpty() && !getLlmModel().trim().isEmpty();
     }
 
     public void reset() {
