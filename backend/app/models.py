@@ -1,0 +1,146 @@
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from .config import get_settings
+from .database import Base
+
+settings = get_settings()
+
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:  # pragma: no cover - dependency is installed in production
+    Vector = None
+
+EmbeddingType = (
+    Vector(settings.embedding_dimensions)
+    if Vector is not None and settings.database_url.startswith("postgresql")
+    else JSON
+)
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def uuid_str() -> str:
+    return str(uuid.uuid4())
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    display_name: Mapped[str] = mapped_column(String(120), default="BluePath Learner")
+    role: Mapped[str] = mapped_column(String(40), default="learner", index=True)
+    guardian_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    guardian_consent: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    profile: Mapped[UserProfile | None] = relationship(back_populates="user", cascade="all, delete-orphan", uselist=False)
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    user: Mapped[User] = relationship(back_populates="profile")
+
+
+class LearningRecord(Base):
+    __tablename__ = "learning_records"
+    __table_args__ = (UniqueConstraint("user_id", "client_record_id", name="uq_learning_record_client"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    client_record_id: Mapped[str] = mapped_column(String(80))
+    record_type: Mapped[str] = mapped_column(String(40), index=True)
+    target_id: Mapped[str] = mapped_column(String(160), index=True)
+    title: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(80), default="")
+    client_updated_at: Mapped[int] = mapped_column(Integer, default=0)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class Content(Base):
+    __tablename__ = "contents"
+
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    title: Mapped[str] = mapped_column(Text)
+    content_type: Mapped[str] = mapped_column(String(40), default="video")
+    source: Mapped[str] = mapped_column(String(240), default="")
+    url: Mapped[str] = mapped_column(Text, default="")
+    difficulty: Mapped[str] = mapped_column(String(40), default="")
+    required_tier: Mapped[str] = mapped_column(String(40), default="브론즈")
+    topic: Mapped[str] = mapped_column(String(120), default="해양교육", index=True)
+    career_tag: Mapped[str] = mapped_column(String(160), default="")
+    minutes: Mapped[int] = mapped_column(Integer, default=0)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class QuizBankItem(Base):
+    __tablename__ = "quiz_bank_items"
+
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    tier: Mapped[str] = mapped_column(String(40), index=True)
+    topic: Mapped[str] = mapped_column(String(120), default="해양교육", index=True)
+    question: Mapped[str] = mapped_column(Text)
+    options: Mapped[list] = mapped_column(JSON, default=list)
+    answer_index: Mapped[int] = mapped_column(Integer)
+    explanation: Mapped[str] = mapped_column(Text)
+    source_title: Mapped[str] = mapped_column(Text, default="")
+    source_url: Mapped[str] = mapped_column(Text, default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class KnowledgeChunk(Base):
+    __tablename__ = "knowledge_chunks"
+
+    id: Mapped[str] = mapped_column(String(160), primary_key=True, default=uuid_str)
+    title: Mapped[str] = mapped_column(Text)
+    organization: Mapped[str] = mapped_column(String(240), default="")
+    url: Mapped[str] = mapped_column(Text, default="")
+    content: Mapped[str] = mapped_column(Text)
+    topic: Mapped[str] = mapped_column(String(120), default="해양교육", index=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    embedding: Mapped[list[float] | None] = mapped_column(EmbeddingType, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class DiamondEvidence(Base):
+    __tablename__ = "diamond_evidence"
+    __table_args__ = (UniqueConstraint("user_id", "evidence_type", name="uq_diamond_evidence_type"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    evidence_type: Mapped[str] = mapped_column(String(40))
+    title: Mapped[str] = mapped_column(Text)
+    evidence_url: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
+    review_note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(240))
+    remind_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    reminder_type: Mapped[str] = mapped_column(String(40), default="learning")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
