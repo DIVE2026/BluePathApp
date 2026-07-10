@@ -4,20 +4,26 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import com.bluepath.app.model.UserProfile;
+import com.bluepath.app.network.ApiModels;
 import com.bluepath.app.util.PromotionRules;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 public class UserStore {
-    private final SharedPreferences prefs;
     private static final String PREF = "bluepath_user";
+    private final SharedPreferences prefs;
+    private final SecureTokenStore secureTokenStore;
 
     public UserStore(Context context) {
         prefs = context.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+        secureTokenStore = new SecureTokenStore(prefs);
     }
 
     public boolean hasProfile() {
@@ -57,7 +63,9 @@ public class UserStore {
     public String getTier() {
         String xpTier = tierForXp(prefs.getInt("xp", 0));
         String quizTier = PromotionRules.tierForRank(prefs.getInt("quizTierRank", 1));
-        return PromotionRules.rank(xpTier) >= PromotionRules.rank(quizTier) ? xpTier : quizTier;
+        String tier = PromotionRules.rank(xpTier) >= PromotionRules.rank(quizTier) ? xpTier : quizTier;
+        if (isDiamondEligible()) tier = "다이아";
+        return tier;
     }
 
     public String getXpTier() {
@@ -69,6 +77,10 @@ public class UserStore {
     }
 
     public void promoteByQuiz(String fromTier) {
+        if ("플래티넘".equals(fromTier)) {
+            prefs.edit().putBoolean("diamondAdvancedQuizPassed", true).apply();
+            return;
+        }
         int targetRank = PromotionRules.rank(PromotionRules.nextTier(fromTier));
         int currentRank = prefs.getInt("quizTierRank", 1);
         if (targetRank > currentRank) prefs.edit().putInt("quizTierRank", targetRank).apply();
@@ -103,7 +115,7 @@ public class UserStore {
     }
 
     public Set<String> getCompletedContentIds() {
-        return new HashSet<>(prefs.getStringSet("completed", new HashSet<String>()));
+        return new HashSet<>(prefs.getStringSet("completed", new HashSet<>()));
     }
 
     public void markCompleted(String contentId) {
@@ -113,7 +125,7 @@ public class UserStore {
     }
 
     public Set<String> getBookmarks() {
-        return new HashSet<>(prefs.getStringSet("bookmarks", new HashSet<String>()));
+        return new HashSet<>(prefs.getStringSet("bookmarks", new HashSet<>()));
     }
 
     public boolean isBookmarked(String id) {
@@ -151,31 +163,233 @@ public class UserStore {
         return prefs.getString("lastQuizSummary", "아직 응시 기록이 없습니다.");
     }
 
-    public void saveLlmConfig(String endpoint, String model, String apiKey) {
+    public void saveCloudSession(String email, String displayName, String accessToken) {
+        secureTokenStore.put(accessToken == null ? "" : accessToken);
         prefs.edit()
-                .putString("llmEndpoint", endpoint == null ? "" : endpoint.trim())
-                .putString("llmModel", model == null ? "" : model.trim())
-                .putString("llmApiKey", apiKey == null ? "" : apiKey.trim())
+                .putString("accountEmail", email == null ? "" : email)
+                .putString("accountDisplayName", displayName == null ? "BluePath Learner" : displayName)
                 .apply();
     }
 
-    public String getLlmEndpoint() {
-        return prefs.getString("llmEndpoint", "");
+    public boolean hasCloudSession() {
+        return !getAccessToken().isEmpty();
     }
 
-    public String getLlmModel() {
-        return prefs.getString("llmModel", "bluepath-marine-ft-v1");
+    public String getAccountEmail() {
+        return prefs.getString("accountEmail", "");
     }
 
-    public String getLlmApiKey() {
-        return prefs.getString("llmApiKey", "");
+    public String getAccountDisplayName() {
+        return prefs.getString("accountDisplayName", "BluePath Learner");
     }
 
-    public boolean hasLlmConfig() {
-        return !getLlmEndpoint().trim().isEmpty() && !getLlmModel().trim().isEmpty();
+    public String getAccessToken() {
+        return secureTokenStore.get();
+    }
+
+    public void clearCloudSession() {
+        secureTokenStore.clear();
+        prefs.edit()
+                .remove("accountEmail")
+                .remove("accountDisplayName")
+                .apply();
+    }
+
+    public void setLastSyncAt(String value) {
+        prefs.edit().putString("lastSyncAt", value == null ? "" : value).apply();
+    }
+
+    public String getLastSyncAt() {
+        return prefs.getString("lastSyncAt", "아직 동기화하지 않았습니다.");
+    }
+
+    public boolean requiresGuardianConsent() {
+        String age = getProfile().ageGroup;
+        return "초등학생".equals(age) || "중학생".equals(age);
+    }
+
+    public boolean hasGuardianConsent() {
+        return prefs.getBoolean("guardianConsent", false);
+    }
+
+    public String getGuardianEmail() {
+        return prefs.getString("guardianEmail", "");
+    }
+
+    public void saveGuardianConsent(boolean consent, String guardianEmail) {
+        prefs.edit()
+                .putBoolean("guardianConsent", consent)
+                .putString("guardianEmail", guardianEmail == null ? "" : guardianEmail.trim())
+                .putLong("guardianConsentAt", consent ? System.currentTimeMillis() : 0L)
+                .apply();
+    }
+
+    public void setReminderEnabled(boolean enabled, int hour, int minute) {
+        prefs.edit()
+                .putBoolean("reminderEnabled", enabled)
+                .putInt("reminderHour", hour)
+                .putInt("reminderMinute", minute)
+                .apply();
+    }
+
+    public boolean isReminderEnabled() {
+        return prefs.getBoolean("reminderEnabled", false);
+    }
+
+    public int getReminderHour() {
+        return prefs.getInt("reminderHour", 19);
+    }
+
+    public int getReminderMinute() {
+        return prefs.getInt("reminderMinute", 0);
+    }
+
+    public boolean isDiamondAdvancedQuizPassed() {
+        return prefs.getBoolean("diamondAdvancedQuizPassed", false);
+    }
+
+    public String getCertificationStatus() {
+        return prefs.getString("diamondCertificationStatus", "not_submitted");
+    }
+
+    public String getProjectStatus() {
+        return prefs.getString("diamondProjectStatus", "not_submitted");
+    }
+
+    public String getCertificationTitle() {
+        return prefs.getString("diamondCertificationTitle", "");
+    }
+
+    public String getProjectTitle() {
+        return prefs.getString("diamondProjectTitle", "");
+    }
+
+    public void markDiamondEvidenceSubmitted(String type, String title) {
+        SharedPreferences.Editor editor = prefs.edit();
+        if ("certification".equals(type)) {
+            editor.putString("diamondCertificationStatus", "pending")
+                    .putString("diamondCertificationTitle", title == null ? "" : title);
+        } else if ("project".equals(type)) {
+            editor.putString("diamondProjectStatus", "pending")
+                    .putString("diamondProjectTitle", title == null ? "" : title);
+        }
+        editor.apply();
+    }
+
+    public void applyDiamondStatus(ApiModels.DiamondStatus status) {
+        if (status == null) return;
+        prefs.edit()
+                .putBoolean("diamondAdvancedQuizPassed", status.advancedQuizPassed)
+                .putString("diamondCertificationStatus", safeStatus(status.certificationStatus))
+                .putString("diamondProjectStatus", safeStatus(status.projectStatus))
+                .apply();
+    }
+
+    public boolean isDiamondEligible() {
+        return isDiamondAdvancedQuizPassed()
+                && "approved".equals(getCertificationStatus())
+                && "approved".equals(getProjectStatus());
+    }
+
+    public Map<String, Object> toCloudSnapshot() {
+        UserProfile profile = getProfile();
+        Map<String, Object> snapshot = new HashMap<>();
+        snapshot.put("ageGroup", profile.ageGroup);
+        snapshot.put("interest", profile.interest);
+        snapshot.put("goal", profile.goal);
+        snapshot.put("level", profile.level);
+        snapshot.put("persona", profile.persona);
+        snapshot.put("xp", profile.xp);
+        snapshot.put("tier", getTier());
+        snapshot.put("quizTier", getQuizTier());
+        snapshot.put("completedContentIds", new ArrayList<>(getCompletedContentIds()));
+        snapshot.put("bookmarks", new ArrayList<>(getBookmarks()));
+        snapshot.put("quizAttempts", getQuizAttempts());
+        snapshot.put("lastQuizSummary", getLastQuizSummary());
+        snapshot.put("bestQuizBronze", getBestQuizScore("브론즈"));
+        snapshot.put("bestQuizSilver", getBestQuizScore("실버"));
+        snapshot.put("bestQuizGold", getBestQuizScore("골드"));
+        snapshot.put("bestQuizPlatinum", getBestQuizScore("플래티넘"));
+        snapshot.put("guardianConsent", hasGuardianConsent());
+        snapshot.put("guardianEmail", getGuardianEmail());
+        snapshot.put("reminderEnabled", isReminderEnabled());
+        snapshot.put("reminderHour", getReminderHour());
+        snapshot.put("reminderMinute", getReminderMinute());
+        snapshot.put("diamondAdvancedQuizPassed", isDiamondAdvancedQuizPassed());
+        snapshot.put("diamondCertificationStatus", getCertificationStatus());
+        snapshot.put("diamondProjectStatus", getProjectStatus());
+        return snapshot;
+    }
+
+    public void applyCloudSnapshot(Map<String, Object> snapshot) {
+        if (snapshot == null || snapshot.isEmpty()) return;
+        SharedPreferences.Editor editor = prefs.edit();
+        putString(editor, snapshot, "ageGroup");
+        putString(editor, snapshot, "interest");
+        putString(editor, snapshot, "goal");
+        putString(editor, snapshot, "level");
+        putString(editor, snapshot, "persona");
+        putInt(editor, snapshot, "xp", "xp");
+        String quizTier = stringValue(snapshot.get("quizTier"));
+        if (!quizTier.isEmpty()) editor.putInt("quizTierRank", PromotionRules.rank(quizTier));
+        putStringSet(editor, snapshot, "completedContentIds", "completed");
+        putStringSet(editor, snapshot, "bookmarks", "bookmarks");
+        putInt(editor, snapshot, "quizAttempts", "quizAttempts");
+        putString(editor, snapshot, "lastQuizSummary");
+        putInt(editor, snapshot, "bestQuizBronze", "bestQuiz_브론즈");
+        putInt(editor, snapshot, "bestQuizSilver", "bestQuiz_실버");
+        putInt(editor, snapshot, "bestQuizGold", "bestQuiz_골드");
+        putInt(editor, snapshot, "bestQuizPlatinum", "bestQuiz_플래티넘");
+        putBoolean(editor, snapshot, "guardianConsent", "guardianConsent");
+        putString(editor, snapshot, "guardianEmail");
+        putBoolean(editor, snapshot, "reminderEnabled", "reminderEnabled");
+        putInt(editor, snapshot, "reminderHour", "reminderHour");
+        putInt(editor, snapshot, "reminderMinute", "reminderMinute");
+        putBoolean(editor, snapshot, "diamondAdvancedQuizPassed", "diamondAdvancedQuizPassed");
+        String certification = stringValue(snapshot.get("diamondCertificationStatus"));
+        String project = stringValue(snapshot.get("diamondProjectStatus"));
+        if (!certification.isEmpty()) editor.putString("diamondCertificationStatus", certification);
+        if (!project.isEmpty()) editor.putString("diamondProjectStatus", project);
+        editor.apply();
+    }
+
+    private void putString(SharedPreferences.Editor editor, Map<String, Object> snapshot, String key) {
+        String value = stringValue(snapshot.get(key));
+        if (!value.isEmpty()) editor.putString(key, value);
+    }
+
+    private void putInt(SharedPreferences.Editor editor, Map<String, Object> snapshot, String sourceKey, String targetKey) {
+        Object value = snapshot.get(sourceKey);
+        if (value instanceof Number) editor.putInt(targetKey, ((Number) value).intValue());
+    }
+
+    private void putBoolean(SharedPreferences.Editor editor, Map<String, Object> snapshot, String sourceKey, String targetKey) {
+        Object value = snapshot.get(sourceKey);
+        if (value instanceof Boolean) editor.putBoolean(targetKey, (Boolean) value);
+    }
+
+    private void putStringSet(SharedPreferences.Editor editor, Map<String, Object> snapshot, String sourceKey, String targetKey) {
+        Object value = snapshot.get(sourceKey);
+        if (!(value instanceof Iterable)) return;
+        Set<String> result = new HashSet<>();
+        for (Object item : (Iterable<?>) value) {
+            String text = stringValue(item);
+            if (!text.isEmpty()) result.add(text);
+        }
+        editor.putStringSet(targetKey, result);
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private String safeStatus(String status) {
+        if (status == null || status.trim().isEmpty()) return "not_submitted";
+        return status;
     }
 
     public void reset() {
+        secureTokenStore.clear();
         prefs.edit().clear().apply();
     }
 }
