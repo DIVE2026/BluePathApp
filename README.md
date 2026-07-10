@@ -62,12 +62,3 @@ export YOUTUBE_API_KEY="YOUR_KEY"
 python scripts/fetch_youtube_videos.py
 ```
 
-## Recommended Extensions for Production
-
-1. Build a FastAPI or NestJS backend.
-2. Connect PostgreSQL with pgvector, or use Supabase.
-3. Implement an admin dashboard for content, education programs, events, and quizzes.
-4. Connect YouTube Data API and institutional CSV/Excel upload pipelines.
-5. Replace the AI Agent with an LLM API + RAG architecture.
-6. Add Firebase Cloud Messaging for education schedules, exams, and quiz notifications.
-7. Apply guardian consent for minors, minimize personal data collection, and anonymize logs.
