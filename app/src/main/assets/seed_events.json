@@ -1,0 +1,8 @@
+[
+  {"id":"e-001","title":"월드베스트 매직 콘서트","startDate":"2012-07-09","endDate":"2012-07-31","target":"전체","category":"공연","description":"국가대표 마술사들이 펼치는 마술 공연"},
+  {"id":"e-002","title":"사운드 오브 매직아트","startDate":"2012-08-01","endDate":"2012-11-30","target":"전체","category":"공연","description":"사운드와 마술, 마임이 어우러진 퍼포먼스"},
+  {"id":"e-003","title":"해로와 미로의 시간탐험대","startDate":"2012-12-01","endDate":"2012-12-31","target":"전체","category":"어린이 공연","description":"마술과 뮤지컬이 어우러진 어린이 마술뮤지컬"},
+  {"id":"e-004","title":"[4D영상관] 4D 독도영상","startDate":"2012-08-15","endDate":"2012-08-15","target":"전체","category":"체험","description":"독도 주변 바다의 해양현상과 생태계를 실감형 영상으로 체험"},
+  {"id":"e-005","title":"무료영화상영 ‘해양가족극장’","startDate":"2012-09-08","endDate":"2012-09-29","target":"전체","category":"영화","description":"가족이 즐길 수 있는 해양·자연 테마 영화 상영"},
+  {"id":"e-006","title":"남극의 눈물 제작 체험담 강연","startDate":"2013-04-11","endDate":"2013-04-11","target":"전체","category":"강연","description":"해양·극지 다큐멘터리 제작 과정과 현장 경험 공유"}
+]
