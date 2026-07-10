@@ -123,7 +123,7 @@ public final class RecommendationEngine {
         if (tier.equals("브론즈")) return "LLM이 만든 10문제를 모두 답한 뒤 7문제 이상 맞히면 " + PromotionRules.displayName("실버") + "로 승급합니다.";
         if (tier.equals("실버")) return "LLM이 만든 12문제를 모두 답한 뒤 9문제 이상 맞히면 " + PromotionRules.displayName("골드") + "로 승급합니다.";
         if (tier.equals("골드")) return "LLM이 만든 15문제를 모두 답한 뒤 10문제 이상 맞히면 " + PromotionRules.displayName("플래티넘") + "으로 승급합니다.";
-        if (tier.equals("플래티넘")) return "기존 XP 4,200점 또는 자격·교육·경력 인증 로드맵으로 " + PromotionRules.displayName("다이아") + "를 준비하세요.";
+        if (tier.equals("플래티넘")) return "고급 20문제 중 16문제 이상을 맞히고 자격 증빙과 해양 프로젝트 승인을 완료하면 " + PromotionRules.displayName("다이아") + " 인증 항로를 완성합니다.";
         return "전문가 단계입니다. 멘토링과 프로젝트 리뷰로 후배 학습자를 도울 수 있습니다.";
     }
 
@@ -135,7 +135,7 @@ public final class RecommendationEngine {
         String q = question == null ? "" : question.toLowerCase();
         if (q.contains("티어") || q.contains("승급") || q.contains("올리")) {
             return "현재 " + PromotionRules.displayName(tier) + " 단계입니다. " + nextAction(p, tier)
-                    + " 최종 티어는 기존 XP 기준과 퀴즈 획득 티어 중 높은 단계가 적용됩니다.";
+                    + " 최종 티어는 XP, 퀴즈 승급, 다이아 인증 경로 중 가장 높은 단계가 적용됩니다.";
         }
         if (q.contains("교육") || q.contains("일정") || q.contains("프로그램")) {
             ProgramItem item = recommendedPrograms(p).get(0);
