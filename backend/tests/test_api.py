@@ -95,6 +95,11 @@ def test_admin_content_and_quiz_management() -> None:
         assert login.status_code == 200, login.text
         headers = auth_header(login.json()['accessToken'])
 
+        radar = client.get('/api/v1/admin/analytics/demand', headers=headers)
+        assert radar.status_code == 200, radar.text
+        assert radar.json()['survey']['sampleSize'] == 43
+        assert isinstance(radar.json()['recommendations'], list)
+
         content_payload = {
             'id': 'program-test-1',
             'title': 'Ocean Safety Workshop',
@@ -255,3 +260,65 @@ def test_rag_quiz_validator_rejects_ungrounded_or_duplicate_choices() -> None:
         validate_quiz_payload(duplicate_choices, '브론즈', 1, sources)
     with pytest.raises(ValueError):
         validate_quiz_payload(missing_source, '브론즈', 1, sources)
+
+
+def test_password_reset_is_one_time_and_does_not_disclose_accounts(monkeypatch) -> None:
+    from backend.app import main as main_module
+
+    captured: dict[str, str] = {}
+
+    def capture_reset_email(email: str, token: str) -> None:
+        captured['email'] = email
+        captured['token'] = token
+
+    monkeypatch.setattr(main_module, 'send_password_reset_email', capture_reset_email)
+
+    with TestClient(app) as client:
+        reset_page = client.get('/reset-password?token=sample-token')
+        assert reset_page.status_code == 200
+        assert '새 비밀번호 설정' in reset_page.text
+
+        email = 'reset-user@bluepath.example.com'
+        old_password = 'OriginalPassword123!'
+        new_password = 'ChangedPassword456!'
+        register = client.post('/api/v1/auth/register', json={
+            'email': email,
+            'password': old_password,
+            'guardianEmail': None,
+        })
+        assert register.status_code == 200, register.text
+
+        unknown = client.post('/api/v1/auth/password-reset/request', json={
+            'email': 'not-found@bluepath.example.com',
+        })
+        known = client.post('/api/v1/auth/password-reset/request', json={'email': email})
+        assert unknown.status_code == 200
+        assert known.status_code == 200
+        assert unknown.json()['message'] == known.json()['message']
+        assert captured['email'] == email
+        assert captured['token']
+
+        confirmed = client.post('/api/v1/auth/password-reset/confirm', json={
+            'token': captured['token'],
+            'newPassword': new_password,
+        })
+        assert confirmed.status_code == 200, confirmed.text
+
+        reused = client.post('/api/v1/auth/password-reset/confirm', json={
+            'token': captured['token'],
+            'newPassword': 'AnotherPassword789!',
+        })
+        assert reused.status_code == 400
+
+        old_login = client.post('/api/v1/auth/login', json={
+            'email': email,
+            'password': old_password,
+            'guardianEmail': None,
+        })
+        new_login = client.post('/api/v1/auth/login', json={
+            'email': email,
+            'password': new_password,
+            'guardianEmail': None,
+        })
+        assert old_login.status_code == 401
+        assert new_login.status_code == 200
