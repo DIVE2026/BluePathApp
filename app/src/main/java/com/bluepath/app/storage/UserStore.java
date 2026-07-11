@@ -18,6 +18,7 @@ import java.util.Set;
 
 public class UserStore {
     private static final String PREF = "bluepath_user";
+    private static final String[] SKILL_TOPICS = {"해양환경", "해양생물", "항해", "선박", "독도·해양문화", "해양안전", "항만·물류", "해양교육"};
     private final SharedPreferences prefs;
     private final SecureTokenStore secureTokenStore;
 
@@ -124,6 +125,30 @@ public class UserStore {
         prefs.edit().putStringSet("completed", ids).apply();
     }
 
+    public void markContentStarted(String contentId) {
+        if (contentId == null || contentId.trim().isEmpty()) return;
+        if (getContentStartedAt(contentId) <= 0L) {
+            prefs.edit().putLong("contentStarted_" + contentId, System.currentTimeMillis()).apply();
+        }
+    }
+
+    public boolean isContentStarted(String contentId) {
+        return getContentStartedAt(contentId) > 0L;
+    }
+
+    public long getContentStartedAt(String contentId) {
+        return prefs.getLong("contentStarted_" + contentId, 0L);
+    }
+
+    public long secondsSinceContentStarted(String contentId) {
+        long startedAt = getContentStartedAt(contentId);
+        return startedAt <= 0L ? 0L : Math.max(0L, (System.currentTimeMillis() - startedAt) / 1000L);
+    }
+
+    public void saveContentReflection(String contentId, String reflection) {
+        prefs.edit().putString("contentReflection_" + contentId, reflection == null ? "" : reflection.trim()).apply();
+    }
+
     public Set<String> getBookmarks() {
         return new HashSet<>(prefs.getStringSet("bookmarks", new HashSet<>()));
     }
@@ -138,17 +163,66 @@ public class UserStore {
         prefs.edit().putStringSet("bookmarks", ids).apply();
     }
 
+    public int calculateQuizXpAward(String tier, int correct, boolean passed) {
+        int previousBest = prefs.getInt("bestQuiz_" + tier, 0);
+        boolean alreadyPassed = prefs.getBoolean("passedQuiz_" + tier, false);
+        if (passed && !alreadyPassed) return 300;
+        int improvement = Math.max(0, correct - previousBest);
+        if (improvement > 0) return Math.min(120, 20 + improvement * 15);
+        return 0;
+    }
+
     public void recordQuizAttempt(String tier, int correct, int total, boolean passed, String source) {
         int attempts = prefs.getInt("quizAttempts", 0) + 1;
         int best = Math.max(correct, prefs.getInt("bestQuiz_" + tier, 0));
         String date = new SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.KOREA).format(new Date());
         String summary = date + " · " + PromotionRules.displayName(tier) + " " + correct + "/" + total + " · "
                 + (passed ? "합격" : "재도전") + " · " + source;
-        prefs.edit()
+        SharedPreferences.Editor editor = prefs.edit()
                 .putInt("quizAttempts", attempts)
+                .putInt("lastQuiz_" + tier, correct)
                 .putInt("bestQuiz_" + tier, best)
-                .putString("lastQuizSummary", summary)
+                .putString("lastQuizSummary", summary);
+        if (passed) editor.putBoolean("passedQuiz_" + tier, true);
+        editor.apply();
+    }
+
+    public void recordSkillEvidence(String topic, boolean correct) {
+        String key = normalizeSkillTopic(topic);
+        prefs.edit()
+                .putInt("skillTotal_" + key, prefs.getInt("skillTotal_" + key, 0) + 1)
+                .putInt("skillCorrect_" + key, prefs.getInt("skillCorrect_" + key, 0) + (correct ? 1 : 0))
                 .apply();
+    }
+
+    public int getSkillMastery(String topic) {
+        String key = normalizeSkillTopic(topic);
+        int total = prefs.getInt("skillTotal_" + key, 0);
+        int correct = prefs.getInt("skillCorrect_" + key, 0);
+        if (total == 0) return 50;
+        return Math.max(0, Math.min(100, Math.round(correct * 100f / total)));
+    }
+
+    public int getSkillEvidenceCount(String topic) {
+        return prefs.getInt("skillTotal_" + normalizeSkillTopic(topic), 0);
+    }
+
+    public Map<String, Integer> getSkillMasteryMap() {
+        Map<String, Integer> result = new HashMap<>();
+        for (String topic : SKILL_TOPICS) result.put(topic, getSkillMastery(topic));
+        return result;
+    }
+
+    private String normalizeSkillTopic(String topic) {
+        String value = topic == null ? "해양교육" : topic.trim();
+        if (value.contains("환경") || value.contains("생태")) return "해양환경";
+        if (value.contains("생물")) return "해양생물";
+        if (value.contains("항해")) return "항해";
+        if (value.contains("선박") || value.contains("기관")) return "선박";
+        if (value.contains("독도") || value.contains("문화")) return "독도·해양문화";
+        if (value.contains("안전") || value.contains("비상")) return "해양안전";
+        if (value.contains("항만") || value.contains("물류")) return "항만·물류";
+        return "해양교육";
     }
 
     public int getQuizAttempts() {
@@ -318,6 +392,7 @@ public class UserStore {
         snapshot.put("diamondAdvancedQuizPassed", isDiamondAdvancedQuizPassed());
         snapshot.put("diamondCertificationStatus", getCertificationStatus());
         snapshot.put("diamondProjectStatus", getProjectStatus());
+        snapshot.put("skillMastery", getSkillMasteryMap());
         return snapshot;
     }
 
@@ -350,6 +425,18 @@ public class UserStore {
         String project = stringValue(snapshot.get("diamondProjectStatus"));
         if (!certification.isEmpty()) editor.putString("diamondCertificationStatus", certification);
         if (!project.isEmpty()) editor.putString("diamondProjectStatus", project);
+        Object skillMastery = snapshot.get("skillMastery");
+        if (skillMastery instanceof Map) {
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) skillMastery).entrySet()) {
+                String topic = stringValue(entry.getKey());
+                Object value = entry.getValue();
+                if (!topic.isEmpty() && value instanceof Number) {
+                    int mastery = Math.max(0, Math.min(100, ((Number) value).intValue()));
+                    editor.putInt("skillTotal_" + normalizeSkillTopic(topic), 100)
+                            .putInt("skillCorrect_" + normalizeSkillTopic(topic), mastery);
+                }
+            }
+        }
         editor.apply();
     }
 
