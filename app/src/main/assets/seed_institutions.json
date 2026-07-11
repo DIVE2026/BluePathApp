@@ -1,0 +1,530 @@
+[
+  {
+    "id": "institution-001",
+    "category": "해운회사",
+    "name": "㈜가나마린",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-002",
+    "category": "해운회사",
+    "name": "거영해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-003",
+    "category": "해운회사",
+    "name": "거제선박㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-004",
+    "category": "해운회사",
+    "name": "경일상운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-005",
+    "category": "해운회사",
+    "name": "㈜고려에스엠",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-006",
+    "category": "해운회사",
+    "name": "고려해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-007",
+    "category": "해운회사",
+    "name": "골디락스쉬핑㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-008",
+    "category": "해운회사",
+    "name": "광명해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-009",
+    "category": "해운회사",
+    "name": "국민비투멘㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-010",
+    "category": "해운회사",
+    "name": "국양해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-011",
+    "category": "여객선사",
+    "name": "고려훼리㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-012",
+    "category": "여객선사",
+    "name": "단동국제항운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-013",
+    "category": "여객선사",
+    "name": "대아고속해운",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-014",
+    "category": "여객선사",
+    "name": "대인훼리㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-015",
+    "category": "여객선사",
+    "name": "대저해운",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-016",
+    "category": "여객선사",
+    "name": "범영훼리㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-017",
+    "category": "예선업체",
+    "name": "㈜강동해운",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-018",
+    "category": "예선업체",
+    "name": "고려예선㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-019",
+    "category": "예선업체",
+    "name": "광운선박㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-020",
+    "category": "예선업체",
+    "name": "광진선박㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-021",
+    "category": "예선업체",
+    "name": "국양쉬핑㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-022",
+    "category": "예선업체",
+    "name": "국제물류㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-023",
+    "category": "예선업체",
+    "name": "㈜국제해운",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-024",
+    "category": "예선업체",
+    "name": "남해선박㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-025",
+    "category": "예선업체",
+    "name": "대동항업㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-026",
+    "category": "예선업체",
+    "name": "대동해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-027",
+    "category": "국제해운대리점업체",
+    "name": "가나마린㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-028",
+    "category": "국제해운대리점업체",
+    "name": "거림해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-029",
+    "category": "국제해운대리점업체",
+    "name": "경일상운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-030",
+    "category": "국제해운대리점업체",
+    "name": "경진해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-031",
+    "category": "국제해운대리점업체",
+    "name": "교려훼리㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-032",
+    "category": "국제해운대리점업체",
+    "name": "교와한국해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-033",
+    "category": "국제해운대리점업체",
+    "name": "국보해운",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-034",
+    "category": "국제해운대리점업체",
+    "name": "그로발스타해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-035",
+    "category": "국제해운대리점업체",
+    "name": "㈜글로벌코리아",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-036",
+    "category": "국제해운대리점업체",
+    "name": "늘푸른해운항공㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-037",
+    "category": "한국해운중개업체",
+    "name": "가야해운",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-038",
+    "category": "한국해운중개업체",
+    "name": "고려용선㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-039",
+    "category": "한국해운중개업체",
+    "name": "네오스타마리타임",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-040",
+    "category": "한국해운중개업체",
+    "name": "동진상운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-041",
+    "category": "한국해운중개업체",
+    "name": "㈜비엔씨쉽브로킹",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-042",
+    "category": "한국해운중개업체",
+    "name": "서로해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-043",
+    "category": "한국해운중개업체",
+    "name": "아넥스쉬핑㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-044",
+    "category": "한국해운중개업체",
+    "name": "아라해운㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-045",
+    "category": "한국해운중개업체",
+    "name": "아산마리타임㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-046",
+    "category": "한국해운중개업체",
+    "name": "아시아용선㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-047",
+    "category": "한국항만물류업체",
+    "name": "삼성중공업㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-048",
+    "category": "한국항만물류업체",
+    "name": "광양항서부컨테이너터미널㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-049",
+    "category": "한국항만물류업체",
+    "name": "대주기업㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-050",
+    "category": "한국항만물류업체",
+    "name": "대주중공업㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-051",
+    "category": "한국항만물류업체",
+    "name": "㈜동방",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-052",
+    "category": "협회",
+    "name": "(사)한국도선사협회",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-053",
+    "category": "협회",
+    "name": "한국도선안전교육연구센터",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-054",
+    "category": "협회",
+    "name": "군산항도선사회",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-055",
+    "category": "협회",
+    "name": "대산항도선사회",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-056",
+    "category": "협회",
+    "name": "동해항도선사회",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-057",
+    "category": "정부기관",
+    "name": "해양수산부",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-058",
+    "category": "정부기관",
+    "name": "군산지방해양수산청",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-059",
+    "category": "정부기관",
+    "name": "대산지방해양수산청",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-060",
+    "category": "정부기관",
+    "name": "동해지방해양수산청",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-061",
+    "category": "정부기관",
+    "name": "마산지방해양수산청",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-062",
+    "category": "유관기관∙단체",
+    "name": "경기평택항만공사",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-063",
+    "category": "유관기관∙단체",
+    "name": "국립해양박물관",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-064",
+    "category": "유관기관∙단체",
+    "name": "국민건강보험공단 부산중부지사",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-065",
+    "category": "유관기관∙단체",
+    "name": "법무법인 국제",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-066",
+    "category": "유관기관∙단체",
+    "name": "(사)대한민국해양연맹",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-067",
+    "category": "유관기관∙단체",
+    "name": "(사)대한조선학회",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-068",
+    "category": "유관기관∙단체",
+    "name": "법무법인 로앤케이",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-069",
+    "category": "유관기관∙단체",
+    "name": "부산본부세관",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-070",
+    "category": "유관기관∙단체",
+    "name": "(재)부산연구원",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-071",
+    "category": "유관기관∙단체",
+    "name": "부산출입국 외국인청",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-072",
+    "category": "선박금융",
+    "name": "㈜국제선박투자운용",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-073",
+    "category": "선박금융",
+    "name": "세계로선박금융㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-074",
+    "category": "선박금융",
+    "name": "캠코선박운용㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-075",
+    "category": "선박금융",
+    "name": "KSF선박금융㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-076",
+    "category": "교육기관∙동창회",
+    "name": "강원도립대학교",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-077",
+    "category": "교육기관∙동창회",
+    "name": "경상국립대학교",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-078",
+    "category": "교육기관∙동창회",
+    "name": "경남해양과학고등학교",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-079",
+    "category": "교육기관∙동창회",
+    "name": "국립군산대학교",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-080",
+    "category": "선급",
+    "name": "라이베리아 기국 한국등록처 법인",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-081",
+    "category": "선급",
+    "name": "러시아선급협회한국지사",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-082",
+    "category": "선급",
+    "name": "로이드선급협회아시아",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-083",
+    "category": "선급",
+    "name": "마샬아일랜드 선박등록처",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-084",
+    "category": "검수검정업체",
+    "name": "㈜고려해운",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-085",
+    "category": "검수검정업체",
+    "name": "국보기업㈜",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-086",
+    "category": "검수검정업체",
+    "name": "(유)국제검수공사",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-087",
+    "category": "검수검정업체",
+    "name": "(합자)국제선박항영사",
+    "source": "해양기관 현황 데이터"
+  },
+  {
+    "id": "institution-088",
+    "category": "검수검정업체",
+    "name": "㈜그린마린",
+    "source": "해양기관 현황 데이터"
+  }
+]
