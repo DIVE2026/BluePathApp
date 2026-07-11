@@ -17,6 +17,7 @@ import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.RadioButton;
@@ -69,7 +70,9 @@ public class MainActivity extends AppCompatActivity {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private LinearLayout root;
     private LinearLayout content;
-    private LinearLayout nav;
+    private FrameLayout appRoot;
+    private LinearLayout sidebar;
+    private View sidebarScrim;
     private int currentTab = 0;
 
     private List<QuizQuestion> activeQuiz = new ArrayList<>();
@@ -80,6 +83,7 @@ public class MainActivity extends AppCompatActivity {
     private String quizSource = "";
     private String quizNotice = "";
     private int quizCorrect = 0;
+    private int quizAwardedXp = 0;
 
     private boolean agentLoading = false;
     private String agentLastAnswer = "질문을 입력하면 해양 AI가 학습·승급·진로 경로를 안내합니다. 온라인 답변에는 근거 자료가 함께 표시됩니다.";
@@ -94,16 +98,27 @@ public class MainActivity extends AppCompatActivity {
         viewModel.operation().observe(this, state -> {
             if (state == null || "처리 중…".equals(state.message)) return;
             toast(state.message);
-            if (!state.success || !store.hasProfile()) return;
-            if ("catalog".equals(state.type)) showApp(currentTab);
-            else showApp(6);
+            if (!state.success) return;
+            if ("login".equals(state.type) || "register".equals(state.type)) {
+                if (store.hasProfile()) {
+                    showApp(0);
+                    if (viewModel.isCloudConfigured()) viewModel.refreshCatalog();
+                } else {
+                    showOnboarding();
+                }
+                return;
+            }
+            if ("password_reset".equals(state.type) || "logout".equals(state.type)) {
+                showLoginScreen();
+                return;
+            }
+            if ("catalog".equals(state.type) && store.hasCloudSession() && store.hasProfile()) {
+                showApp(currentTab);
+                return;
+            }
+            if (store.hasCloudSession() && store.hasProfile()) showApp(currentTab);
         });
-        if (!store.hasProfile()) {
-            showOnboarding();
-        } else {
-            showApp(0);
-            if (store.hasCloudSession() && viewModel.isCloudConfigured()) viewModel.refreshCatalog();
-        }
+        showWelcomeScreen();
     }
 
     @Override
@@ -112,7 +127,252 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+    private void showWelcomeScreen() {
+        root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(24), dp(28), dp(24), dp(28));
+        root.setBackgroundResource(R.drawable.bg_welcome);
+        setContentView(root);
+
+        TextView compass = new TextView(this);
+        compass.setText("✦  DATA · SKILL · CAREER  ✦");
+        compass.setTextColor(Color.parseColor("#BFFBFA"));
+        compass.setTextSize(12);
+        compass.setTypeface(Typeface.DEFAULT_BOLD);
+        compass.setGravity(Gravity.CENTER);
+        root.addView(compass);
+
+        OceanGraphicView graphic = new OceanGraphicView(this);
+        LinearLayout.LayoutParams graphicParams = new LinearLayout.LayoutParams(-1, dp(245));
+        graphicParams.setMargins(0, dp(18), 0, dp(18));
+        root.addView(graphic, graphicParams);
+
+        TextView brand = new TextView(this);
+        brand.setText("BLUEPATH");
+        brand.setTextColor(Color.WHITE);
+        brand.setTextSize(48);
+        brand.setLetterSpacing(0.12f);
+        brand.setTypeface(Typeface.DEFAULT_BOLD);
+        brand.setGravity(Gravity.CENTER);
+        root.addView(brand);
+
+        TextView tagline = new TextView(this);
+        tagline.setText("나의 현재 위치에서 해양 미래까지\n데이터로 항로를 설계하는 스마트 해도");
+        tagline.setTextColor(Color.parseColor("#D9FFFF"));
+        tagline.setTextSize(16);
+        tagline.setGravity(Gravity.CENTER);
+        tagline.setLineSpacing(dp(4), 1.05f);
+        tagline.setPadding(0, dp(12), 0, dp(18));
+        root.addView(tagline);
+
+        LinearLayout features = row();
+        features.addView(welcomeMetric("92", "교육 과정"), new LinearLayout.LayoutParams(0, -2, 1));
+        features.addView(welcomeMetric("28", "해양 영상"), new LinearLayout.LayoutParams(0, -2, 1));
+        features.addView(welcomeMetric("88", "해양 기관"), new LinearLayout.LayoutParams(0, -2, 1));
+        root.addView(features);
+
+        View spacer = new View(this);
+        root.addView(spacer, new LinearLayout.LayoutParams(1, 0, 1));
+
+        Button start = new Button(this);
+        start.setText("시작하기  →");
+        start.setAllCaps(false);
+        start.setTextColor(NAVY);
+        start.setTextSize(16);
+        start.setTypeface(Typeface.DEFAULT_BOLD);
+        GradientDrawable startBg = new GradientDrawable();
+        startBg.setColor(Color.WHITE);
+        startBg.setCornerRadius(dp(18));
+        start.setBackground(startBg);
+        start.setOnClickListener(v -> showLoginScreen());
+        root.addView(start, new LinearLayout.LayoutParams(-1, dp(58)));
+
+        TextView foot = new TextView(this);
+        foot.setText("국립해양박물관 · 해양교육 · NCS 진로 데이터 기반");
+        foot.setTextColor(Color.parseColor("#B9E8ED"));
+        foot.setTextSize(11);
+        foot.setGravity(Gravity.CENTER);
+        foot.setPadding(0, dp(14), 0, 0);
+        root.addView(foot);
+    }
+
+    private LinearLayout welcomeMetric(String value, String caption) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(dp(5), dp(10), dp(5), dp(10));
+        TextView number = new TextView(this);
+        number.setText(value);
+        number.setTextColor(Color.WHITE);
+        number.setTextSize(21);
+        number.setTypeface(Typeface.DEFAULT_BOLD);
+        number.setGravity(Gravity.CENTER);
+        TextView text = new TextView(this);
+        text.setText(caption);
+        text.setTextColor(Color.parseColor("#BFFBFA"));
+        text.setTextSize(11);
+        text.setGravity(Gravity.CENTER);
+        box.addView(number);
+        box.addView(text);
+        return box;
+    }
+
+    private void showLoginScreen() {
+        ScrollView scroll = new ScrollView(this);
+        root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(22), dp(18), dp(22), dp(28));
+        root.setBackgroundColor(BG);
+        scroll.addView(root);
+        setContentView(scroll);
+
+        OceanGraphicView graphic = new OceanGraphicView(this);
+        root.addView(graphic, new LinearLayout.LayoutParams(-1, dp(135)));
+        root.addView(title("BluePath 로그인"));
+        root.addView(body("로그인 후에만 홈·학습·퀴즈·일정·진로·AI·MY 항로를 이용할 수 있습니다."));
+
+        if (store.hasCloudSession()) {
+            LinearLayout sessionCard = card();
+            sessionCard.addView(label("SAVED SESSION"));
+            sessionCard.addView(big(store.getAccountDisplayName()));
+            sessionCard.addView(body(store.getAccountEmail() + " 계정으로 안전하게 계속할 수 있습니다."));
+            Button continueButton = primaryButton("이 계정으로 계속하기");
+            continueButton.setOnClickListener(v -> {
+                if (store.hasProfile()) showApp(0); else showOnboarding();
+            });
+            sessionCard.addView(continueButton, new LinearLayout.LayoutParams(-1, dp(50)));
+            root.addView(sessionCard);
+            root.addView(label("다른 계정으로 로그인"));
+        }
+
+        LinearLayout form = card();
+        EditText email = inputField("email@example.com", store.getAccountEmail());
+        EditText password = inputField("8자 이상 비밀번호", "");
+        password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        form.addView(label("이메일"));
+        form.addView(email);
+        form.addView(label("비밀번호"));
+        form.addView(password);
+
+        Button login = primaryButton("로그인");
+        login.setOnClickListener(v -> {
+            String emailValue = email.getText().toString().trim();
+            String passwordValue = password.getText().toString();
+            if (emailValue.isEmpty() || passwordValue.length() < 8) {
+                toast("이메일과 8자 이상의 비밀번호를 입력해 주세요.");
+                return;
+            }
+            viewModel.login(emailValue, passwordValue);
+        });
+        LinearLayout.LayoutParams loginParams = new LinearLayout.LayoutParams(-1, dp(52));
+        loginParams.setMargins(0, dp(16), 0, dp(6));
+        form.addView(login, loginParams);
+
+        Button forgot = outlineButton("비밀번호를 잊어버렸나요?");
+        forgot.setOnClickListener(v -> showForgotPasswordScreen());
+        form.addView(forgot, new LinearLayout.LayoutParams(-1, dp(46)));
+        root.addView(form);
+
+        LinearLayout signupCard = card();
+        signupCard.addView(big("처음 오셨나요?"));
+        signupCard.addView(body("회원가입 후 연령·관심 분야·목표를 설정하면 개인 맞춤 해양 항로가 생성됩니다."));
+        Button signup = outlineButton("회원가입");
+        signup.setOnClickListener(v -> showRegisterScreen());
+        signupCard.addView(signup, new LinearLayout.LayoutParams(-1, dp(48)));
+        root.addView(signupCard);
+
+        Button back = outlineButton("소개 화면으로 돌아가기");
+        back.setOnClickListener(v -> showWelcomeScreen());
+        root.addView(back, new LinearLayout.LayoutParams(-1, dp(46)));
+
+        if (!viewModel.isCloudConfigured()) {
+            root.addView(note("이 빌드에는 BLUEPATH_API_BASE_URL이 설정되지 않았습니다. 회원가입과 로그인을 사용하려면 서버 주소를 설정해 주세요.", DANGER));
+        }
+    }
+
+    private void showRegisterScreen() {
+        ScrollView scroll = new ScrollView(this);
+        root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(22), dp(24), dp(22), dp(28));
+        root.setBackgroundColor(BG);
+        scroll.addView(root);
+        setContentView(scroll);
+
+        root.addView(title("BluePath 회원가입"));
+        root.addView(body("계정을 만든 뒤 해양 인재 프로필을 설정합니다. 미성년 사용자의 보호자 동의는 프로필 설정 단계에서 이어집니다."));
+        LinearLayout form = card();
+        EditText email = inputField("email@example.com", "");
+        EditText password = inputField("8자 이상 비밀번호", "");
+        EditText confirm = inputField("비밀번호 다시 입력", "");
+        EditText guardian = inputField("보호자 이메일 (선택)", "");
+        password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        confirm.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        form.addView(label("이메일")); form.addView(email);
+        form.addView(label("비밀번호")); form.addView(password);
+        form.addView(label("비밀번호 확인")); form.addView(confirm);
+        form.addView(label("보호자 이메일")); form.addView(guardian);
+        Button create = primaryButton("계정 만들기");
+        create.setOnClickListener(v -> {
+            String emailValue = email.getText().toString().trim();
+            String passwordValue = password.getText().toString();
+            if (emailValue.isEmpty() || passwordValue.length() < 8) {
+                toast("이메일과 8자 이상의 비밀번호를 입력해 주세요.");
+                return;
+            }
+            if (!passwordValue.equals(confirm.getText().toString())) {
+                toast("비밀번호 확인이 일치하지 않습니다.");
+                return;
+            }
+            viewModel.register(emailValue, passwordValue, guardian.getText().toString().trim());
+        });
+        LinearLayout.LayoutParams createParams = new LinearLayout.LayoutParams(-1, dp(52));
+        createParams.setMargins(0, dp(16), 0, 0);
+        form.addView(create, createParams);
+        root.addView(form);
+        Button back = outlineButton("로그인으로 돌아가기");
+        back.setOnClickListener(v -> showLoginScreen());
+        root.addView(back, new LinearLayout.LayoutParams(-1, dp(48)));
+    }
+
+    private void showForgotPasswordScreen() {
+        ScrollView scroll = new ScrollView(this);
+        root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(22), dp(26), dp(22), dp(28));
+        root.setBackgroundColor(BG);
+        scroll.addView(root);
+        setContentView(scroll);
+
+        root.addView(title("비밀번호 재설정"));
+        root.addView(body("가입한 이메일을 입력하면 안전한 일회용 재설정 링크를 보냅니다. 계정 존재 여부는 보안을 위해 화면에 구분해서 표시하지 않습니다."));
+        LinearLayout form = card();
+        EditText email = inputField("email@example.com", store.getAccountEmail());
+        form.addView(label("가입 이메일"));
+        form.addView(email);
+        Button request = primaryButton("재설정 안내 보내기");
+        request.setOnClickListener(v -> {
+            String value = email.getText().toString().trim();
+            if (value.isEmpty() || !value.contains("@")) {
+                toast("올바른 이메일을 입력해 주세요.");
+                return;
+            }
+            viewModel.requestPasswordReset(value);
+        });
+        LinearLayout.LayoutParams requestParams = new LinearLayout.LayoutParams(-1, dp(52));
+        requestParams.setMargins(0, dp(16), 0, 0);
+        form.addView(request, requestParams);
+        root.addView(form);
+        Button back = outlineButton("로그인으로 돌아가기");
+        back.setOnClickListener(v -> showLoginScreen());
+        root.addView(back, new LinearLayout.LayoutParams(-1, dp(48)));
+    }
+
     private void showOnboarding() {
+        if (!store.hasCloudSession()) {
+            showLoginScreen();
+            return;
+        }
         ScrollView scroll = new ScrollView(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -126,7 +386,7 @@ public class MainActivity extends AppCompatActivity {
 
         TextView title = title("BluePath\n스마트 해도 AI");
         root.addView(title);
-        root.addView(body("해양 콘텐츠, AI 승급 퀴즈, NCS 진로 로드맵을 하나의 항해 경로로 연결합니다. 먼저 나에게 맞는 해양 인재 프로필을 설정하세요."));
+        root.addView(body("해양 콘텐츠, 역량 진단, 실제 교육 일정과 NCS 진로 로드맵을 하나의 항해 경로로 연결합니다. 첫 항로를 만들기 위해 해양 인재 프로필을 설정하세요."));
 
         Spinner age = spinner(new String[]{"초등학생", "중학생", "고등학생", "대학생", "성인", "직장인", "학부모/가족"});
         Spinner interest = spinner(new String[]{"해양환경", "해양생물", "항해", "선박", "독도·해양문화", "해양안전", "항만·물류"});
@@ -145,7 +405,12 @@ public class MainActivity extends AppCompatActivity {
             String g = goal.getSelectedItem().toString();
             String l = level.getSelectedItem().toString();
             store.saveProfile(new UserProfile(a, i, g, l, RecommendationEngine.persona(a, g, i), 0));
-            if (store.requiresGuardianConsent()) showGuardianConsentDialog(true); else showApp(0);
+            if (store.requiresGuardianConsent()) {
+                showGuardianConsentDialog(true);
+            } else {
+                if (viewModel.isCloudConfigured()) viewModel.syncNow();
+                showApp(0);
+            }
         });
         LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(-1, dp(52));
         startParams.setMargins(0, dp(18), 0, 0);
@@ -153,32 +418,50 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showApp(int tab) {
+        if (!store.hasCloudSession()) {
+            showLoginScreen();
+            return;
+        }
+        if (!store.hasProfile()) {
+            showOnboarding();
+            return;
+        }
         currentTab = tab;
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BG);
-        setContentView(root);
+        appRoot = new FrameLayout(this);
+        appRoot.setBackgroundColor(BG);
+        setContentView(appRoot);
+
+        LinearLayout main = new LinearLayout(this);
+        main.setOrientation(LinearLayout.VERTICAL);
+        main.setBackgroundColor(BG);
+        appRoot.addView(main, new FrameLayout.LayoutParams(-1, -1));
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(18), dp(16), dp(14), dp(12));
+        header.setPadding(dp(12), dp(14), dp(12), dp(12));
         header.setBackgroundResource(R.drawable.bg_ocean_header);
 
         LinearLayout headerRow = row();
         headerRow.setGravity(Gravity.CENTER_VERTICAL);
+        Button menu = outlineButton("☰");
+        menu.setTextSize(20);
+        menu.setOnClickListener(v -> openSidebar());
+        headerRow.addView(menu, new LinearLayout.LayoutParams(dp(48), dp(42)));
+
         LinearLayout brand = new LinearLayout(this);
         brand.setOrientation(LinearLayout.VERTICAL);
+        brand.setPadding(dp(12), 0, 0, 0);
         TextView h = new TextView(this);
         h.setText("⚓ BluePath");
         h.setTextColor(Color.WHITE);
-        h.setTextSize(23);
+        h.setTextSize(22);
         h.setTypeface(Typeface.DEFAULT_BOLD);
         brand.addView(h);
         TextView sub = new TextView(this);
-        sub.setText("해양 학습 · AI 퀴즈 · 커리어 항해");
+        sub.setText(tabTitle(tab) + " · 데이터 기반 해양 항로");
         sub.setTextColor(Color.parseColor("#C9FFFF"));
-        sub.setTextSize(12);
-        sub.setPadding(0, dp(3), 0, 0);
+        sub.setTextSize(11);
+        sub.setPadding(0, dp(2), 0, 0);
         brand.addView(sub);
         headerRow.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
 
@@ -187,8 +470,7 @@ public class MainActivity extends AppCompatActivity {
         manual.setOnClickListener(v -> showPromotionManual());
         headerRow.addView(manual, new LinearLayout.LayoutParams(dp(88), dp(38)));
         header.addView(headerRow);
-
-        root.addView(header);
+        main.addView(header);
 
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -196,37 +478,101 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.addView(content);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        main.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        nav = new LinearLayout(this);
-        nav.setOrientation(LinearLayout.HORIZONTAL);
-        nav.setBackgroundColor(Color.WHITE);
-        nav.setPadding(dp(4), dp(6), dp(4), dp(6));
-        root.addView(nav);
-        addNavButton("홈", 0);
-        addNavButton("학습", 1);
-        addNavButton("퀴즈", 2);
-        addNavButton("일정", 3);
-        addNavButton("진로", 4);
-        addNavButton("AI", 5);
-        addNavButton("MY", 6);
+        sidebarScrim = new View(this);
+        sidebarScrim.setBackgroundColor(Color.parseColor("#7706223F"));
+        sidebarScrim.setVisibility(View.GONE);
+        sidebarScrim.setOnClickListener(v -> closeSidebar());
+        appRoot.addView(sidebarScrim, new FrameLayout.LayoutParams(-1, -1));
+
+        sidebar = new LinearLayout(this);
+        sidebar.setOrientation(LinearLayout.VERTICAL);
+        sidebar.setPadding(dp(16), dp(22), dp(16), dp(20));
+        sidebar.setBackgroundResource(R.drawable.bg_sidebar);
+        sidebar.setElevation(dp(14));
+        sidebar.setVisibility(View.GONE);
+        FrameLayout.LayoutParams sidebarParams = new FrameLayout.LayoutParams(dp(286), -1, Gravity.START);
+        appRoot.addView(sidebar, sidebarParams);
+
+        LinearLayout sideHead = row();
+        sideHead.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout sideBrand = new LinearLayout(this);
+        sideBrand.setOrientation(LinearLayout.VERTICAL);
+        sideBrand.addView(big("BLUEPATH"));
+        sideBrand.addView(label("나의 해양 스마트 해도"));
+        sideHead.addView(sideBrand, new LinearLayout.LayoutParams(0, -2, 1));
+        Button close = outlineButton("×");
+        close.setTextSize(22);
+        close.setOnClickListener(v -> closeSidebar());
+        sideHead.addView(close, new LinearLayout.LayoutParams(dp(44), dp(40)));
+        sidebar.addView(sideHead);
+
+        LinearLayout account = card();
+        account.addView(label("SIGNED IN"));
+        account.addView(big(store.getAccountDisplayName()));
+        account.addView(body(store.getAccountEmail()));
+        sidebar.addView(account);
+
+        addNavButton("⌂  홈", 0);
+        addNavButton("▶  학습", 1);
+        addNavButton("✓  퀴즈", 2);
+        addNavButton("◷  일정", 3);
+        addNavButton("⌁  진로", 4);
+        addNavButton("✦  AI", 5);
+        addNavButton("●  MY", 6);
+
+        View sideSpacer = new View(this);
+        sidebar.addView(sideSpacer, new LinearLayout.LayoutParams(1, 0, 1));
+        TextView sideNote = body("메뉴는 언제든 열고 닫을 수 있습니다. 각 탭 상단에서 목적과 사용 방법을 먼저 확인하세요.");
+        sideNote.setTextColor(MUTED);
+        sidebar.addView(sideNote);
 
         renderTab(tab);
+    }
+
+    private String tabTitle(int tab) {
+        switch (tab) {
+            case 1: return "학습";
+            case 2: return "퀴즈";
+            case 3: return "일정";
+            case 4: return "진로";
+            case 5: return "AI";
+            case 6: return "MY";
+            default: return "홈";
+        }
+    }
+
+    private void openSidebar() {
+        if (sidebar == null || sidebarScrim == null) return;
+        sidebarScrim.setAlpha(0f);
+        sidebarScrim.setVisibility(View.VISIBLE);
+        sidebarScrim.animate().alpha(1f).setDuration(180).start();
+        sidebar.setTranslationX(-dp(286));
+        sidebar.setVisibility(View.VISIBLE);
+        sidebar.animate().translationX(0f).setDuration(220).start();
+    }
+
+    private void closeSidebar() {
+        if (sidebar == null || sidebarScrim == null || sidebar.getVisibility() != View.VISIBLE) return;
+        sidebarScrim.animate().alpha(0f).setDuration(160).withEndAction(() -> sidebarScrim.setVisibility(View.GONE)).start();
+        sidebar.animate().translationX(-dp(286)).setDuration(190).withEndAction(() -> sidebar.setVisibility(View.GONE)).start();
     }
 
     private void addNavButton(String label, int tab) {
         Button b = new Button(this);
         b.setText(label);
-        b.setTextSize(10);
+        b.setTextSize(14);
         b.setAllCaps(false);
-        b.setMinWidth(0);
-        b.setMinimumWidth(0);
-        b.setPadding(dp(1), 0, dp(1), 0);
-        b.setTextColor(tab == currentTab ? NAVY : MUTED);
+        b.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        b.setPadding(dp(16), 0, dp(12), 0);
+        b.setTextColor(tab == currentTab ? NAVY : TEXT);
         b.setTypeface(Typeface.DEFAULT, tab == currentTab ? Typeface.BOLD : Typeface.NORMAL);
         b.setBackgroundResource(tab == currentTab ? R.drawable.bg_nav_selected : android.R.color.transparent);
         b.setOnClickListener(v -> showApp(tab));
-        nav.addView(b, new LinearLayout.LayoutParams(0, dp(48), 1));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(52));
+        params.setMargins(0, dp(2), 0, dp(2));
+        sidebar.addView(b, params);
     }
 
     private void renderTab(int tab) {
@@ -243,7 +589,54 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void addTabIntro(String icon, String eyebrow, String titleText, String description) {
+        LinearLayout intro = new LinearLayout(this);
+        intro.setOrientation(LinearLayout.VERTICAL);
+        intro.setPadding(dp(18), dp(16), dp(18), dp(16));
+        intro.setBackgroundResource(R.drawable.bg_tab_intro);
+        intro.setElevation(dp(2));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.setMargins(0, 0, 0, dp(14));
+        intro.setLayoutParams(params);
+
+        LinearLayout top = row();
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView iconView = new TextView(this);
+        iconView.setText(icon);
+        iconView.setTextSize(28);
+        iconView.setGravity(Gravity.CENTER);
+        top.addView(iconView, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.setPadding(dp(10), 0, 0, 0);
+        TextView eye = new TextView(this);
+        eye.setText(eyebrow);
+        eye.setTextColor(Color.parseColor("#9EF5F0"));
+        eye.setTextSize(11);
+        eye.setLetterSpacing(0.08f);
+        eye.setTypeface(Typeface.DEFAULT_BOLD);
+        copy.addView(eye);
+        TextView title = new TextView(this);
+        title.setText(titleText);
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(22);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setPadding(0, dp(3), 0, 0);
+        copy.addView(title);
+        top.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
+        intro.addView(top);
+        TextView desc = new TextView(this);
+        desc.setText(description);
+        desc.setTextColor(Color.parseColor("#D9FFFF"));
+        desc.setTextSize(13);
+        desc.setLineSpacing(dp(2), 1.05f);
+        desc.setPadding(0, dp(10), 0, 0);
+        intro.addView(desc);
+        content.addView(intro);
+    }
+
     private void renderHome() {
+        addTabIntro("🧭", "TODAY'S ROUTE", "홈 · 오늘의 항로", "현재 티어와 역량 데이터, 다음 학습, 실제 교육 일정과 관람객 수요 근거를 한 화면에서 확인합니다.");
         UserProfile p = store.getProfile();
         String tier = store.getTier();
         String xpTier = store.getXpTier();
@@ -270,36 +663,49 @@ public class MainActivity extends AppCompatActivity {
         content.addView(hero);
 
         LinearLayout stats = row();
-        stats.addView(statCard("28", "전체 영상"), new LinearLayout.LayoutParams(0, -2, 1));
+        stats.addView(statCard(String.valueOf(DataRepository.contents().size()), "전체 영상"), new LinearLayout.LayoutParams(0, -2, 1));
         stats.addView(statCard(String.valueOf(store.getCompletedContentIds().size()), "학습 완료"), new LinearLayout.LayoutParams(0, -2, 1));
         stats.addView(statCard(String.valueOf(store.getQuizAttempts()), "퀴즈 응시"), new LinearLayout.LayoutParams(0, -2, 1));
         content.addView(stats);
 
+        addSkillSummaryCard();
+
         content.addView(sectionTitle("AI 추천 항로"));
-        List<ContentItem> items = RecommendationEngine.recommendedContents(p, tier);
+        List<ContentItem> items = RecommendationEngine.recommendedContents(p, tier, store);
         for (int i = 0; i < Math.min(3, items.size()); i++) addContentCard(items.get(i), true);
 
         content.addView(sectionTitle("다음 승급 체크포인트"));
         LinearLayout ruleCard = card();
         ruleCard.addView(big(PromotionRules.quizRule(tier)));
-        ruleCard.addView(body("선택지마다 정오를 공개하지 않습니다. 모든 문항을 선택한 뒤 최종 채점에서 점수와 문항별 해설을 확인합니다."));
+        ruleCard.addView(body("반복 실패만으로 XP를 얻을 수 없습니다. 최초 합격 또는 이전 최고점 향상에만 보상이 지급되며, 오답 분야는 역량 숙련도와 다음 추천에 반영됩니다."));
         Button goQuiz = primaryButton("승급 퀴즈로 이동");
         goQuiz.setOnClickListener(v -> showApp(2));
         ruleCard.addView(goQuiz, new LinearLayout.LayoutParams(-1, dp(46)));
         content.addView(ruleCard);
 
         content.addView(sectionTitle("추천 교육 일정"));
-        List<ProgramItem> programs = RecommendationEngine.recommendedPrograms(p);
+        List<ProgramItem> programs = RecommendationEngine.recommendedPrograms(p, store);
         for (int i = 0; i < Math.min(2, programs.size()); i++) addProgramCard(programs.get(i));
+
+        List<String> insights = DataRepository.surveyInsights();
+        if (!insights.isEmpty()) {
+            content.addView(sectionTitle("관람객 데이터가 말하는 설계 근거"));
+            LinearLayout insightCard = card();
+            insightCard.addView(big("실제 관람객 " + DataRepository.surveySampleSize() + "명 응답 분석"));
+            for (int i = 0; i < Math.min(4, insights.size()); i++) insightCard.addView(body("• " + insights.get(i)));
+            insightCard.addView(note("이 수요를 가족형 체험, 모바일 안내, 교육 프로그램 추천의 우선순위에 반영했습니다.", OCEAN));
+            content.addView(insightCard);
+        }
     }
 
     private void renderLearning() {
+        addTabIntro("🌊", "LEARNING LIBRARY", "학습 · 맞춤 콘텐츠", "관심 분야와 통합 티어뿐 아니라 완료 기록과 퀴즈 오답으로 발견한 역량 갭까지 반영해 다음 영상을 추천합니다.");
         UserProfile p = store.getProfile();
         String tier = store.getTier();
         content.addView(sectionTitle("난도별 해양 영상 라이브러리"));
         content.addView(body("첨부 스프레드시트의 28개 영상을 모두 반영했습니다. 하 10개, 중 10개, 상 8개로 분류되며 추천 점수 안에서는 개인 관심 분야가 우선됩니다."));
 
-        List<ContentItem> all = RecommendationEngine.recommendedContents(p, tier);
+        List<ContentItem> all = RecommendationEngine.recommendedContents(p, tier, store);
         addDifficultySection("하", "입문 · " + PromotionRules.displayName("브론즈"), all);
         addDifficultySection("중", "진로 탐색 · " + PromotionRules.displayName("실버"), all);
         addDifficultySection("상", "직무 심화 · " + PromotionRules.displayName("골드"), all);
@@ -320,6 +726,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderQuiz() {
+        addTabIntro("✓", "SKILL CHECK", "퀴즈 · 역량 진단", "승급 점수만 확인하는 것이 아니라 문항별 주제를 역량 증거로 저장해 다음 학습과 진로 추천을 정교하게 만듭니다.");
         String currentTier = store.getTier();
         content.addView(sectionTitle("AI 승급 퀴즈"));
         content.addView(body("현재 통합 티어: " + PromotionRules.displayName(currentTier) + " · " + PromotionRules.quizRule(currentTier)));
@@ -482,13 +889,18 @@ public class MainActivity extends AppCompatActivity {
         }
 
         int correct = 0;
-        for (int i = 0; i < activeQuiz.size(); i++) if (selectedAnswers[i] == activeQuiz.get(i).answerIndex) correct++;
+        for (int i = 0; i < activeQuiz.size(); i++) {
+            boolean isCorrect = selectedAnswers[i] == activeQuiz.get(i).answerIndex;
+            if (isCorrect) correct++;
+            store.recordSkillEvidence(activeQuiz.get(i).topic, isCorrect);
+        }
         quizCorrect = correct;
         boolean passed = correct >= PromotionRules.passCount(quizAttemptTier);
+        quizAwardedXp = store.calculateQuizXpAward(quizAttemptTier, correct, passed);
         store.recordQuizAttempt(quizAttemptTier, correct, activeQuiz.size(), passed, quizSource);
         viewModel.recordLearning("quiz", quizAttemptTier, PromotionRules.displayName(quizAttemptTier),
                 correct + "/" + activeQuiz.size() + (passed ? " passed" : " retry"));
-        store.addXp(passed ? 300 : 80);
+        if (quizAwardedXp > 0) store.addXp(quizAwardedXp);
         if (passed) store.promoteByQuiz(quizAttemptTier);
         quizSubmitted = true;
         showApp(2);
@@ -504,7 +916,7 @@ public class MainActivity extends AppCompatActivity {
         result.addView(body(quizCorrect + " / " + total + " 정답 · 합격선 " + PromotionRules.passCount(quizAttemptTier) + "문제"));
         String passMessage;
         if (passed && "플래티넘".equals(quizAttemptTier)) {
-            passMessage = "다이아 고급 퀴즈를 통과했습니다. 마이페이지에서 자격 증빙과 해양 프로젝트를 제출해 인증 항로를 완성하세요.";
+            passMessage = "다이아 고급 퀴즈를 통과했습니다. MY에서 자격 증빙과 해양 프로젝트를 제출해 인증 항로를 완성하세요.";
         } else if (passed) {
             passMessage = PromotionRules.displayName(quizAttemptTier) + "에서 "
                     + PromotionRules.displayName(PromotionRules.nextTier(quizAttemptTier))
@@ -513,7 +925,11 @@ public class MainActivity extends AppCompatActivity {
             passMessage = "합격까지 " + Math.max(0, PromotionRules.passCount(quizAttemptTier) - quizCorrect) + "문제가 더 필요합니다.";
         }
         result.addView(note(passMessage, passed ? SUCCESS : DANGER));
-        result.addView(body("아래에서 각 문항의 내 답, 정답, 해설을 확인할 수 있습니다."));
+        result.addView(note(quizAwardedXp > 0
+                ? "이번 시도 XP +" + quizAwardedXp + " · 최초 합격 또는 최고점 향상 보상"
+                : "이번 시도 XP 0 · 동일 점수 반복이나 반복 실패에는 보상이 지급되지 않습니다.",
+                quizAwardedXp > 0 ? OCEAN : MUTED));
+        result.addView(body("아래에서 문항별 정답과 해설을 확인하세요. 각 주제의 결과는 MY 역량 여권과 다음 추천에 반영됩니다."));
         content.addView(result);
     }
 
@@ -526,25 +942,42 @@ public class MainActivity extends AppCompatActivity {
         quizSource = "";
         quizNotice = "";
         quizCorrect = 0;
+        quizAwardedXp = 0;
     }
 
     private void renderSchedule() {
+        addTabIntro("◷", "LIVE & ARCHIVE", "일정 · 교육 탐색", "국립해양박물관과 한국해양수산연수원의 제공 데이터를 현재 일정과 종료 아카이브로 구분하고, 추천 근거와 출처를 함께 보여줍니다.");
         UserProfile p = store.getProfile();
+        List<ProgramItem> programs = RecommendationEngine.recommendedPrograms(p, store);
+        List<EventItem> events = RecommendationEngine.recommendedEvents(p);
+
+        LinearLayout dataCard = card();
+        dataCard.addView(big("교육 과정 " + programs.size() + "개 · 행사 " + events.size() + "개"));
+        dataCard.addView(body("전체 데이터는 추천 계산과 AI 근거에 사용됩니다. 화면에는 탐색성을 위해 우선순위가 높은 항목을 먼저 표시합니다."));
+        dataCard.addView(note("종료된 일정은 현재 모집 중인 과정처럼 보이지 않도록 ‘종료·아카이브’로 명확히 구분합니다.", OCEAN));
+        content.addView(dataCard);
+
         content.addView(sectionTitle("교육 프로그램 스케줄"));
-        content.addView(body("프로필 적합도 순으로 교육·체험 일정을 추천합니다. 제공 데이터의 운영 기간이 지난 항목은 참고용 아카이브로 표시됩니다."));
-        for (ProgramItem item : RecommendationEngine.recommendedPrograms(p)) addProgramCard(item);
+        int shownPrograms = Math.min(20, programs.size());
+        for (int i = 0; i < shownPrograms; i++) addProgramCard(programs.get(i));
+        if (programs.size() > shownPrograms) content.addView(note("전체 " + programs.size() + "개 중 상위 " + shownPrograms + "개를 표시했습니다. 나머지 데이터도 추천 엔진과 AI 검색에 포함됩니다.", MUTED));
+
         content.addView(sectionTitle("이벤트·영화·공연 아카이브"));
-        for (EventItem e : RecommendationEngine.recommendedEvents(p)) addEventCard(e);
+        int shownEvents = Math.min(12, events.size());
+        for (int i = 0; i < shownEvents; i++) addEventCard(events.get(i));
+        if (events.size() > shownEvents) content.addView(note("전체 " + events.size() + "개 중 상위 " + shownEvents + "개를 표시했습니다.", MUTED));
     }
 
     private void renderCareer() {
+        addTabIntro("⌁", "NCS CAREER MAP", "진로 · 역량 항로", "통합 티어, 관심 분야, 역량 숙련도를 NCS 핵심 역량과 실제 해양기관 데이터에 연결해 다음 단계를 제안합니다.");
         UserProfile p = store.getProfile();
         content.addView(sectionTitle("NCS 기반 커리어 항로"));
         content.addView(body("관심 분야, 현재 티어, 학습 목표를 바탕으로 직무·필요 역량·근무지·다음 학습을 연결합니다."));
-        for (CareerItem c : RecommendationEngine.recommendedCareers(p)) addCareerCard(c);
+        for (CareerItem c : RecommendationEngine.recommendedCareers(p, store.getTier(), store)) addCareerCard(c);
     }
 
     private void renderAgent() {
+        addTabIntro("✦", "SOURCED MARINE AI", "AI · 근거 기반 상담", "학습·승급·일정·진로 질문을 해양 특화 데이터와 출처를 바탕으로 상담하고, 연결 실패 시 검증된 로컬 안내로 전환합니다.");
         UserProfile p = store.getProfile();
         String tier = store.getTier();
         content.addView(sectionTitle("BluePath Marine AI Agent"));
@@ -599,7 +1032,7 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     UserProfile profile = store.getProfile();
                     answer = llmClient.answerAgent(trimmed, profile, store.getTier(),
-                            RecommendationEngine.recommendedContents(profile, store.getTier()),
+                            RecommendationEngine.recommendedContents(profile, store.getTier(), store),
                             PromotionRules.fullManual());
                 } catch (Exception e) {
                     answer = "LLM 호출에 실패해 로컬 상담으로 전환했습니다.\n\n"
@@ -619,9 +1052,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderMyPage() {
+        addTabIntro("●", "MY OCEAN PASSPORT", "MY · 나의 해양 여권", "프로필, 분야별 숙련도, 검증된 학습 증거, 승급 기록, 클라우드 동기화와 다이아 인증 경로를 관리합니다.");
         UserProfile p = store.getProfile();
         String tier = store.getTier();
-        content.addView(sectionTitle("마이페이지"));
 
         LinearLayout profileCard = card();
         LinearLayout profileTop = row();
@@ -640,6 +1073,7 @@ public class MainActivity extends AppCompatActivity {
         profileText.setPadding(dp(12), 0, 0, 0);
         profileText.addView(big(p.persona));
         profileText.addView(body(p.ageGroup + " · " + p.interest + " · " + p.goal));
+        profileText.addView(label(store.getAccountEmail()));
         profileTop.addView(profileText, new LinearLayout.LayoutParams(0, -2, 1));
         profileTop.addView(tierBadge(tier));
         profileCard.addView(profileTop);
@@ -647,10 +1081,18 @@ public class MainActivity extends AppCompatActivity {
         content.addView(profileCard);
 
         LinearLayout stats = row();
-        stats.addView(statCard(String.valueOf(store.getCompletedContentIds().size()), "완료"), new LinearLayout.LayoutParams(0, -2, 1));
+        stats.addView(statCard(String.valueOf(store.getCompletedContentIds().size()), "검증 완료"), new LinearLayout.LayoutParams(0, -2, 1));
         stats.addView(statCard(String.valueOf(store.getBookmarks().size()), "찜"), new LinearLayout.LayoutParams(0, -2, 1));
         stats.addView(statCard(String.valueOf(store.getQuizAttempts()), "응시"), new LinearLayout.LayoutParams(0, -2, 1));
         content.addView(stats);
+
+        content.addView(sectionTitle("Ocean Skill Passport"));
+        LinearLayout skillCard = card();
+        skillCard.addView(big("분야별 역량 숙련도"));
+        skillCard.addView(body("퀴즈 문항과 학습 완료 증거를 기반으로 계산합니다. 증거가 없는 분야는 진단 전 기준값 50점으로 표시됩니다."));
+        String[] topics = {"해양환경", "해양생물", "항해", "선박", "독도·해양문화", "해양안전", "항만·물류"};
+        for (String topic : topics) addSkillProgress(skillCard, topic);
+        content.addView(skillCard);
 
         content.addView(sectionTitle("승급·학습 리포트"));
         LinearLayout report = card();
@@ -665,7 +1107,7 @@ public class MainActivity extends AppCompatActivity {
         report.addView(manual);
         content.addView(report);
 
-        content.addView(sectionTitle("최근 학습 기록"));
+        content.addView(sectionTitle("검증된 학습 기록"));
         addIdListCard("완료한 영상", store.getCompletedContentIds());
         addIdListCard("찜한 항목", store.getBookmarks());
 
@@ -691,41 +1133,30 @@ public class MainActivity extends AppCompatActivity {
             String l = level.getSelectedItem().toString();
             store.saveProfile(new UserProfile(a, i, g, l, RecommendationEngine.persona(a, g, i), p.xp));
             toast("프로필을 저장했습니다.");
-            if (store.requiresGuardianConsent() && !store.hasGuardianConsent()) showGuardianConsentDialog(false);
-            else showApp(6);
+            if (store.requiresGuardianConsent() && !store.hasGuardianConsent()) {
+                showGuardianConsentDialog(false);
+            } else {
+                if (viewModel.isCloudConfigured()) viewModel.syncNow();
+                showApp(6);
+            }
         });
         editCard.addView(saveProfile, new LinearLayout.LayoutParams(-1, dp(48)));
         content.addView(editCard);
 
         content.addView(sectionTitle("계정과 클라우드 백업"));
         LinearLayout cloudCard = card();
-        if (store.hasCloudSession()) {
-            cloudCard.addView(big("☁️ " + store.getAccountDisplayName()));
-            cloudCard.addView(body(store.getAccountEmail()));
-            cloudCard.addView(body("마지막 동기화: " + store.getLastSyncAt()));
-            Button sync = primaryButton("학습 기록 지금 동기화");
-            sync.setOnClickListener(v -> viewModel.syncNow());
-            cloudCard.addView(sync, new LinearLayout.LayoutParams(-1, dp(48)));
-            Button catalog = outlineButton("최신 학습 자료 불러오기");
-            catalog.setOnClickListener(v -> viewModel.refreshCatalog());
-            cloudCard.addView(catalog);
-            Button logout = outlineButton("로그아웃");
-            logout.setOnClickListener(v -> viewModel.logout());
-            cloudCard.addView(logout);
-        } else {
-            cloudCard.addView(big("기기 변경에도 학습 기록을 이어가세요"));
-            cloudCard.addView(body(viewModel.isCloudConfigured()
-                    ? "계정을 만들면 완료 영상, 찜, 퀴즈 기록, 다이아 인증 진행 상태를 안전하게 동기화할 수 있습니다."
-                    : "현재는 기기 안에 기록이 저장됩니다. 영상 학습, 퀴즈, 추천, 진로 탐색은 그대로 이용할 수 있습니다."));
-            if (viewModel.isCloudConfigured()) {
-                Button create = primaryButton("계정 만들기");
-                create.setOnClickListener(v -> showAccountDialog(true));
-                cloudCard.addView(create, new LinearLayout.LayoutParams(-1, dp(48)));
-                Button login = outlineButton("로그인");
-                login.setOnClickListener(v -> showAccountDialog(false));
-                cloudCard.addView(login);
-            }
-        }
+        cloudCard.addView(big("☁️ " + store.getAccountDisplayName()));
+        cloudCard.addView(body(store.getAccountEmail()));
+        cloudCard.addView(body("마지막 동기화: " + store.getLastSyncAt()));
+        Button sync = primaryButton("학습 기록 지금 동기화");
+        sync.setOnClickListener(v -> viewModel.syncNow());
+        cloudCard.addView(sync, new LinearLayout.LayoutParams(-1, dp(48)));
+        Button catalog = outlineButton("최신 학습 자료 불러오기");
+        catalog.setOnClickListener(v -> viewModel.refreshCatalog());
+        cloudCard.addView(catalog);
+        Button logout = outlineButton("로그아웃");
+        logout.setOnClickListener(v -> viewModel.logout());
+        cloudCard.addView(logout);
         content.addView(cloudCard);
 
         content.addView(sectionTitle("학습 알림과 캘린더"));
@@ -767,11 +1198,9 @@ public class MainActivity extends AppCompatActivity {
             Button project = outlineButton("해양 프로젝트 제출");
             project.setOnClickListener(v -> showDiamondEvidenceDialog("project"));
             diamondCard.addView(project);
-            if (store.hasCloudSession()) {
-                Button refresh = primaryButton("검토 상태 새로고침");
-                refresh.setOnClickListener(v -> viewModel.refreshDiamondStatus());
-                diamondCard.addView(refresh, new LinearLayout.LayoutParams(-1, dp(48)));
-            }
+            Button refresh = primaryButton("검토 상태 새로고침");
+            refresh.setOnClickListener(v -> viewModel.refreshDiamondStatus());
+            diamondCard.addView(refresh, new LinearLayout.LayoutParams(-1, dp(48)));
         } else {
             diamondCard.addView(body("플래티넘에 도달하면 고급 퀴즈와 증빙 제출 메뉴가 활성화됩니다."));
         }
@@ -782,7 +1211,7 @@ public class MainActivity extends AppCompatActivity {
         privacyCard.addView(big(store.requiresGuardianConsent()
                 ? (store.hasGuardianConsent() ? "🛡️ 보호자 동의 완료" : "🛡️ 보호자 동의 필요")
                 : "🛡️ 개인정보 보호"));
-        privacyCard.addView(body("BluePath는 학습 추천에 필요한 최소 프로필만 사용하며, 계정 동기화를 선택하지 않으면 학습 기록은 기기에 보관됩니다."));
+        privacyCard.addView(body("BluePath는 로그인 계정으로 프로필과 학습 증거를 동기화하며, 인증 토큰은 Android Keystore 기반 저장소로 보호합니다."));
         if (store.requiresGuardianConsent()) {
             Button consent = outlineButton(store.hasGuardianConsent() ? "보호자 동의 정보 확인" : "보호자 동의 진행");
             consent.setOnClickListener(v -> showGuardianConsentDialog(false));
@@ -795,20 +1224,131 @@ public class MainActivity extends AppCompatActivity {
 
         content.addView(sectionTitle("앱 관리"));
         LinearLayout account = card();
-        account.addView(body("학습 기록을 초기화하면 이 기기에 저장된 프로필, XP, 티어, 퀴즈 결과와 찜 목록이 삭제됩니다."));
+        account.addView(body("초기화하면 이 기기의 프로필, XP, 티어, 역량 증거, 퀴즈 결과와 찜 목록이 삭제되고 로그인 화면으로 돌아갑니다."));
         Button reset = outlineButton("프로필과 학습 기록 초기화");
         reset.setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle("모든 기록을 초기화할까요?")
-                .setMessage("프로필, XP, 승급 티어, 퀴즈 기록, 찜, 동기화 정보가 삭제됩니다.")
+                .setMessage("프로필, XP, 승급 티어, 역량 증거, 퀴즈 기록, 찜과 로그인 정보가 삭제됩니다.")
                 .setNegativeButton("취소", null)
                 .setPositiveButton("초기화", (dialog, which) -> {
                     NotificationHelper.cancelDaily(this);
                     store.reset();
                     clearQuizSession();
-                    showOnboarding();
+                    showWelcomeScreen();
                 }).show());
         account.addView(reset);
         content.addView(account);
+    }
+
+    private void addSkillSummaryCard() {
+        String[] topics = {"해양환경", "해양생물", "항해", "선박", "독도·해양문화", "해양안전", "항만·물류"};
+        String lowestTopic = store.getProfile().interest;
+        int lowest = 101;
+        boolean hasEvidence = false;
+        for (String topic : topics) {
+            if (store.getSkillEvidenceCount(topic) <= 0) continue;
+            hasEvidence = true;
+            int mastery = store.getSkillMastery(topic);
+            if (mastery < lowest) {
+                lowest = mastery;
+                lowestTopic = topic;
+            }
+        }
+        LinearLayout card = card();
+        card.addView(label("OCEAN SKILL SIGNAL"));
+        card.addView(big(hasEvidence ? "우선 보완 역량 · " + lowestTopic : "첫 역량 진단이 필요합니다"));
+        card.addView(body(hasEvidence
+                ? lowestTopic + " 숙련도 " + lowest + "점입니다. 이 역량을 보완하는 콘텐츠와 교육 과정이 추천 상단에 배치됩니다."
+                : "퀴즈를 한 번 완료하면 문항별 결과가 분야별 숙련도로 전환되고 다음 추천이 달라집니다."));
+        final boolean evidenceAvailable = hasEvidence;
+        Button go = outlineButton(evidenceAvailable ? "MY에서 전체 숙련도 보기" : "퀴즈로 진단 시작");
+        go.setOnClickListener(v -> showApp(evidenceAvailable ? 6 : 2));
+        card.addView(go);
+        content.addView(card);
+    }
+
+    private void addSkillProgress(LinearLayout parent, String topic) {
+        int score = store.getSkillMastery(topic);
+        int evidence = store.getSkillEvidenceCount(topic);
+        LinearLayout header = row();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView name = body(topic);
+        name.setTypeface(Typeface.DEFAULT_BOLD);
+        header.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView value = label(score + "점 · 증거 " + evidence + "개");
+        value.setGravity(Gravity.END);
+        header.addView(value);
+        parent.addView(header);
+        ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        progress.setProgress(score);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(9));
+        params.setMargins(0, 0, 0, dp(8));
+        parent.addView(progress, params);
+    }
+
+    private void addReasonList(LinearLayout parent, List<String> reasons) {
+        if (reasons == null || reasons.isEmpty()) return;
+        parent.addView(label("추천 근거"));
+        for (int i = 0; i < Math.min(4, reasons.size()); i++) parent.addView(body("• " + reasons.get(i)));
+    }
+
+    private String joinList(List<String> values, String separator) {
+        StringBuilder builder = new StringBuilder();
+        for (String value : values) {
+            if (builder.length() > 0) builder.append(separator);
+            builder.append(value);
+        }
+        return builder.toString();
+    }
+
+    private void showContentCompletionDialog(ContentItem item) {
+        if (store.getCompletedContentIds().contains(item.id)) {
+            toast("이미 완료 인증된 학습입니다.");
+            return;
+        }
+        if (!store.isContentStarted(item.id)) {
+            toast("먼저 영상 학습을 시작해 주세요.");
+            return;
+        }
+        long elapsed = store.secondsSinceContentStarted(item.id);
+        long minimumSeconds = 45L;
+        if (elapsed < minimumSeconds) {
+            toast("완료 인증까지 최소 " + (minimumSeconds - elapsed) + "초의 학습 시간이 더 필요합니다.");
+            return;
+        }
+
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), 0);
+        form.addView(body("버튼 클릭만으로 완료 처리하지 않습니다. 영상에서 배운 핵심 내용을 한 문장 이상 기록하면 학습 증거와 XP가 인정됩니다."));
+        EditText reflection = inputField("핵심 내용 또는 새롭게 알게 된 점", "");
+        reflection.setSingleLine(false);
+        reflection.setMinLines(3);
+        form.addView(reflection);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("학습 완료 인증")
+                .setView(form)
+                .setNegativeButton("취소", null)
+                .setPositiveButton("완료 인증", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String value = reflection.getText().toString().trim();
+            if (value.length() < 10) {
+                reflection.setError("10자 이상으로 핵심 내용을 작성해 주세요.");
+                return;
+            }
+            store.markCompleted(item.id);
+            store.saveContentReflection(item.id, value);
+            store.recordSkillEvidence(item.topic, true);
+            int xp = item.difficulty.equals("하") ? 80 : item.difficulty.equals("중") ? 120 : 180;
+            store.addXp(xp);
+            viewModel.recordLearning("video", item.id, item.title, "completed_with_reflection");
+            dialog.dismiss();
+            toast("학습 완료가 인증되었습니다. XP +" + xp);
+            showApp(currentTab);
+        }));
+        dialog.show();
     }
 
     private void addIdListCard(String title, Set<String> ids) {
@@ -838,23 +1378,25 @@ public class MainActivity extends AppCompatActivity {
     private void addContentCard(ContentItem item, boolean compact) {
         UserProfile p = store.getProfile();
         String tier = store.getTier();
-        int score = RecommendationEngine.scoreContent(item, p, tier);
+        int score = RecommendationEngine.scoreContent(item, p, tier, store);
         boolean completed = store.getCompletedContentIds().contains(item.id);
+        boolean started = store.isContentStarted(item.id);
         LinearLayout card = card();
         card.addView(label(item.difficulty + " 난도 · " + PromotionRules.displayName(item.requiredTier) + " 권장 · 적합도 " + score));
         card.addView(big("▶ " + item.title));
         String duration = item.minutes > 0 ? " · " + item.minutes + "분" : "";
         card.addView(body("출처: " + item.source + duration));
         card.addView(body("분야: " + item.topic + " · 연결 진로: " + item.careerTag));
-        if (completed) card.addView(note("학습 완료", SUCCESS));
-        LinearLayout row = row();
-        Button watch = primaryButton(compact ? "보기" : (completed ? "다시 보기" : "영상 보기"));
+        addReasonList(card, RecommendationEngine.contentReasons(item, p, tier, store));
+        if (completed) card.addView(note("학습 완료 인증 · XP 반영됨", SUCCESS));
+        else if (started) card.addView(note("학습 시작 기록됨 · 시청 후 핵심 내용을 제출해 완료를 인증하세요.", OCEAN));
+
+        LinearLayout actionRow = row();
+        Button watch = primaryButton(compact ? "열기" : (started ? "영상 계속 보기" : "영상 학습 시작"));
         watch.setOnClickListener(v -> {
-            if (!store.getCompletedContentIds().contains(item.id)) {
-                store.markCompleted(item.id);
-                store.addXp(item.difficulty.equals("하") ? 80 : item.difficulty.equals("중") ? 120 : 180);
-                viewModel.recordLearning("video", item.id, item.title, "completed");
-            }
+            store.markContentStarted(item.id);
+            viewModel.recordLearning("video", item.id, item.title, "started");
+            showApp(currentTab);
             openUrl(item.url);
         });
         Button save = outlineButton(store.isBookmarked(item.id) ? "찜 해제" : "찜");
@@ -866,22 +1408,32 @@ public class MainActivity extends AppCompatActivity {
         });
         LinearLayout.LayoutParams left = new LinearLayout.LayoutParams(0, dp(44), 1);
         left.setMargins(0, 0, dp(6), 0);
-        row.addView(watch, left);
+        actionRow.addView(watch, left);
         LinearLayout.LayoutParams right = new LinearLayout.LayoutParams(0, dp(44), 1);
         right.setMargins(dp(6), 0, 0, 0);
-        row.addView(save, right);
-        card.addView(row);
+        actionRow.addView(save, right);
+        card.addView(actionRow);
+
+        if (started && !completed) {
+            Button complete = outlineButton("학습 완료 인증");
+            complete.setOnClickListener(v -> showContentCompletionDialog(item));
+            card.addView(complete, new LinearLayout.LayoutParams(-1, dp(46)));
+        }
         content.addView(card);
     }
 
     private void addProgramCard(ProgramItem item) {
         UserProfile p = store.getProfile();
-        int score = RecommendationEngine.scoreProgram(item, p);
+        int score = RecommendationEngine.scoreProgram(item, p, store);
+        String status = RecommendationEngine.scheduleStatus(item.startDate, item.endDate);
+        boolean archived = RecommendationEngine.isArchived(item.startDate, item.endDate);
         LinearLayout card = card();
-        card.addView(label(item.topic + " · 추천 " + score + "점"));
+        card.addView(label(item.topic + " · 추천 " + score + "점 · " + status));
         card.addView(big("📚 " + item.title));
         card.addView(body(item.startDate + " ~ " + item.endDate + " · " + item.target + " · " + item.method));
         card.addView(body(item.description));
+        addReasonList(card, RecommendationEngine.programReasons(item, p, store));
+        if (archived) card.addView(note("현재 신청 가능한 일정이 아니라 교육 이력과 수요 분석을 위한 아카이브 자료입니다.", MUTED));
         Button b = outlineButton(store.isBookmarked(item.id) ? "일정 찜 해제" : "일정 찜하기");
         b.setOnClickListener(v -> {
             store.toggleBookmark(item.id);
@@ -890,21 +1442,29 @@ public class MainActivity extends AppCompatActivity {
             showApp(currentTab);
         });
         card.addView(b);
-        Button calendar = outlineButton("내 캘린더에 추가");
-        calendar.setOnClickListener(v -> addProgramToCalendar(item));
-        card.addView(calendar);
+        if (!archived && !"데이터 확인 필요".equals(status)) {
+            Button calendar = outlineButton("내 캘린더에 추가");
+            calendar.setOnClickListener(v -> addProgramToCalendar(item));
+            card.addView(calendar);
+        }
         content.addView(card);
     }
 
     private void addEventCard(EventItem item) {
+        String status = RecommendationEngine.scheduleStatus(item.startDate, item.endDate);
         LinearLayout card = card();
-        card.addView(label(item.category + " · " + item.target));
+        card.addView(label(item.category + " · " + item.target + " · " + status));
         card.addView(big("🎪 " + item.title));
         card.addView(body(item.startDate + " ~ " + item.endDate));
         card.addView(body(item.description));
+        card.addView(body("출처: " + item.source));
+        if (RecommendationEngine.isArchived(item.startDate, item.endDate)) {
+            card.addView(note("종료된 행사입니다. 유사 프로그램 기획과 개인 관심 분석을 위한 아카이브로 제공합니다.", MUTED));
+        }
         Button b = outlineButton(store.isBookmarked(item.id) ? "이벤트 찜 해제" : "이벤트 찜하기");
         b.setOnClickListener(v -> {
             store.toggleBookmark(item.id);
+            viewModel.recordLearning("event", item.id, item.title, store.isBookmarked(item.id) ? "saved" : "removed");
             toast("이벤트 찜 목록을 업데이트했습니다.");
             showApp(currentTab);
         });
@@ -914,62 +1474,27 @@ public class MainActivity extends AppCompatActivity {
 
     private void addCareerCard(CareerItem item) {
         UserProfile p = store.getProfile();
-        int score = RecommendationEngine.scoreCareer(item, p);
+        String tier = store.getTier();
+        int score = RecommendationEngine.scoreCareer(item, p, tier, store);
         LinearLayout card = card();
         card.addView(label(item.field + " · 권장 " + PromotionRules.displayName(item.recommendedTier) + " · 적합도 " + score));
         card.addView(big("🧭 " + item.title));
         card.addView(body(item.description));
+        addReasonList(card, RecommendationEngine.careerReasons(item, p, tier, store));
         card.addView(label("필요 역량 / NCS"));
         card.addView(body(join(item.ncsUnits, " → ")));
-        card.addView(label("관련 근무지"));
-        card.addView(body(join(item.workplaces, ", ")));
-        card.addView(body("추천 로드맵: 관련 영상 학습 → 승급 퀴즈 → 교육 일정 찜 → NCS 역량 강화 → 자격·현장 경험"));
+        card.addView(label("실제 데이터에서 연결된 기관 예시"));
+        List<String> institutions = RecommendationEngine.relatedInstitutions(item, 4);
+        card.addView(body(institutions.isEmpty() ? join(item.workplaces, ", ") : joinList(institutions, " · ")));
+        card.addView(note("추천 로드맵: 역량 갭 진단 → 근거 영상 학습 → 승급 퀴즈 → 실제 교육 과정 → 자격·프로젝트 증빙", OCEAN));
         content.addView(card);
-    }
-
-    private void showAccountDialog(boolean createAccount) {
-        LinearLayout form = new LinearLayout(this);
-        form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(dp(18), dp(8), dp(18), 0);
-        EditText email = inputField("email@example.com", store.getAccountEmail());
-        EditText password = inputField("8자 이상 비밀번호", "");
-        password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        form.addView(label("이메일"));
-        form.addView(email);
-        form.addView(label("비밀번호"));
-        form.addView(password);
-        EditText guardianEmail = null;
-        if (createAccount && store.requiresGuardianConsent()) {
-            guardianEmail = inputField("보호자 이메일", store.getGuardianEmail());
-            form.addView(label("보호자 이메일"));
-            form.addView(guardianEmail);
-        }
-        final EditText guardian = guardianEmail;
-        new AlertDialog.Builder(this)
-                .setTitle(createAccount ? "BluePath 계정 만들기" : "BluePath 로그인")
-                .setView(form)
-                .setNegativeButton("취소", null)
-                .setPositiveButton(createAccount ? "계정 만들기" : "로그인", (dialog, which) -> {
-                    String emailValue = email.getText().toString().trim();
-                    String passwordValue = password.getText().toString();
-                    if (emailValue.isEmpty() || passwordValue.length() < 8) {
-                        toast("이메일과 8자 이상의 비밀번호를 입력해 주세요.");
-                        return;
-                    }
-                    if (createAccount) {
-                        String guardianValue = guardian == null ? "" : guardian.getText().toString().trim();
-                        viewModel.register(emailValue, passwordValue, guardianValue);
-                    } else {
-                        viewModel.login(emailValue, passwordValue);
-                    }
-                }).show();
     }
 
     private void showGuardianConsentDialog(boolean onboarding) {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(8), dp(18), 0);
-        TextView notice = body("보호자는 연령대·관심 분야·학습 목표와 학습 기록이 맞춤 추천에 사용되는 것에 동의합니다. 계정을 만들지 않으면 기록은 이 기기에만 저장됩니다.");
+        TextView notice = body("보호자는 연령대·관심 분야·학습 목표와 학습 증거가 맞춤 추천 및 계정 동기화에 사용되는 것에 동의합니다. 최소 정보만 수집하며 동의 기록을 MY에서 확인할 수 있습니다.");
         EditText guardianEmail = inputField("보호자 이메일", store.getGuardianEmail());
         form.addView(notice);
         form.addView(label("보호자 이메일"));
@@ -990,6 +1515,7 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
                     store.saveGuardianConsent(true, email);
+                    if (viewModel.isCloudConfigured()) viewModel.syncNow();
                     toast("보호자 동의 정보를 저장했습니다.");
                     showApp(onboarding ? 0 : 6);
                 }).show();
@@ -1009,8 +1535,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void showDiamondEvidenceDialog(String type) {
         if (!store.hasCloudSession()) {
-            toast("증빙 검토를 받으려면 먼저 로그인해 주세요.");
-            if (viewModel.isCloudConfigured()) showAccountDialog(false);
+            toast("증빙 검토를 받으려면 다시 로그인해 주세요.");
+            showLoginScreen();
             return;
         }
         boolean certification = "certification".equals(type);
@@ -1083,6 +1609,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void addProgramToCalendar(ProgramItem item) {
+        if (RecommendationEngine.isArchived(item.startDate, item.endDate)) {
+            toast("종료된 아카이브 일정은 캘린더에 추가할 수 없습니다.");
+            return;
+        }
         try {
             String[] startParts = item.startDate.split("-");
             String[] endParts = item.endDate.split("-");
@@ -1107,7 +1637,7 @@ public class MainActivity extends AppCompatActivity {
     private void showPrivacyNotice() {
         new AlertDialog.Builder(this)
                 .setTitle("BluePath 개인정보 안내")
-                .setMessage("맞춤 추천을 위해 연령대, 관심 분야, 학습 목표, 수준, 학습 완료와 퀴즈 기록을 사용합니다. 계정 동기화는 선택 사항이며, 로그아웃하거나 계정을 만들지 않은 경우 기록은 기기에 저장됩니다. 미성년 사용자는 보호자 동의를 관리할 수 있습니다.")
+                .setMessage("맞춤 추천을 위해 연령대, 관심 분야, 학습 목표, 수준, 영상 학습 시작·완료 증거, 퀴즈 결과와 역량 숙련도를 사용합니다. 앱 이용 전 로그인이 필요하며 학습 기록은 계정과 동기화할 수 있습니다. 인증 토큰은 Android Keystore 기반 저장소에 보호되고, 미성년 사용자는 보호자 동의를 관리할 수 있습니다.")
                 .setPositiveButton("확인", null)
                 .show();
     }
