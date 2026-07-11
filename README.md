@@ -1,5 +1,7 @@
 # BluePath — Data-Driven Ocean Skill Navigator
 
+[shot1](assets/shot1.png)
+
 BluePath is an Android learning and career-navigation platform that converts marine videos, museum programs, training courses, visitor-demand data, quizzes, and NCS-oriented career competencies into an explainable personal route.
 
 ## Product Flow
