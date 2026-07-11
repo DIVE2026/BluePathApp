@@ -8,9 +8,15 @@ public class EventItem {
     public final String target;
     public final String category;
     public final String description;
+    public final String source;
 
     public EventItem(String id, String title, String startDate, String endDate, String target,
                      String category, String description) {
+        this(id, title, startDate, endDate, target, category, description, "제공 데이터");
+    }
+
+    public EventItem(String id, String title, String startDate, String endDate, String target,
+                     String category, String description, String source) {
         this.id = id;
         this.title = title;
         this.startDate = startDate;
@@ -18,5 +24,6 @@ public class EventItem {
         this.target = target;
         this.category = category;
         this.description = description;
+        this.source = source == null ? "" : source;
     }
 }
