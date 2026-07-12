@@ -42,7 +42,7 @@ import com.bluepath.app.util.MarineLlmClient;
 import com.bluepath.app.util.NotificationHelper;
 import com.bluepath.app.util.PromotionRules;
 import com.bluepath.app.util.RecommendationEngine;
-import com.bluepath.app.view.OceanGraphicView;
+import com.bluepath.app.view.OceanBackgroundView;
 import com.bluepath.app.viewmodel.BluePathViewModel;
 
 import java.util.ArrayList;
@@ -128,63 +128,75 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showWelcomeScreen() {
+        FrameLayout screen = oceanFrame();
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(24), dp(28), dp(24), dp(28));
-        root.setBackgroundResource(R.drawable.bg_welcome);
-        setContentView(root);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(dp(26), dp(26), dp(26), dp(28));
+        screen.addView(root, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(screen);
 
-        TextView compass = new TextView(this);
-        compass.setText("✦  DATA · SKILL · CAREER  ✦");
-        compass.setTextColor(Color.parseColor("#BFFBFA"));
-        compass.setTextSize(12);
-        compass.setTypeface(Typeface.DEFAULT_BOLD);
-        compass.setGravity(Gravity.CENTER);
-        root.addView(compass);
+        TextView eyebrow = authLabel("MARINE · DATA · CAREER");
+        eyebrow.setGravity(Gravity.CENTER);
+        eyebrow.setLetterSpacing(0.12f);
+        root.addView(eyebrow);
 
-        OceanGraphicView graphic = new OceanGraphicView(this);
-        LinearLayout.LayoutParams graphicParams = new LinearLayout.LayoutParams(-1, dp(245));
-        graphicParams.setMargins(0, dp(18), 0, dp(18));
-        root.addView(graphic, graphicParams);
+        View upperSpace = new View(this);
+        root.addView(upperSpace, new LinearLayout.LayoutParams(1, 0, 0.65f));
+
+        TextView waveMark = new TextView(this);
+        waveMark.setText("∿");
+        waveMark.setTextColor(Color.WHITE);
+        waveMark.setTextSize(98);
+        waveMark.setTypeface(Typeface.DEFAULT_BOLD);
+        waveMark.setGravity(Gravity.CENTER);
+        waveMark.setIncludeFontPadding(false);
+        root.addView(waveMark, new LinearLayout.LayoutParams(-1, dp(112)));
 
         TextView brand = new TextView(this);
         brand.setText("BLUEPATH");
         brand.setTextColor(Color.WHITE);
-        brand.setTextSize(48);
-        brand.setLetterSpacing(0.12f);
+        brand.setTextSize(42);
+        brand.setLetterSpacing(0.10f);
         brand.setTypeface(Typeface.DEFAULT_BOLD);
         brand.setGravity(Gravity.CENTER);
         root.addView(brand);
 
-        TextView tagline = new TextView(this);
-        tagline.setText("나의 현재 수준에서 해양 전문가가 되기까지\n데이터로 항로를 설계하는 스마트 해도");
-        tagline.setTextColor(Color.parseColor("#D9FFFF"));
+        TextView tagline = authBody("데이터로 나만의 항로를 설계하고\n해양 진로와 배움의 타이밍을 발견하세요");
         tagline.setTextSize(16);
         tagline.setGravity(Gravity.CENTER);
-        tagline.setLineSpacing(dp(4), 1.05f);
+        tagline.setLineSpacing(dp(5), 1.05f);
         tagline.setPadding(0, dp(12), 0, dp(18));
         root.addView(tagline);
 
+        LinearLayout dots = row();
+        dots.setGravity(Gravity.CENTER);
+        for (int i = 0; i < 4; i++) {
+            TextView dot = new TextView(this);
+            dot.setText(i == 0 ? "●" : "•");
+            dot.setTextColor(i == 0 ? Color.WHITE : Color.parseColor("#7FC6CA"));
+            dot.setTextSize(i == 0 ? 13 : 18);
+            dot.setGravity(Gravity.CENTER);
+            dots.addView(dot, new LinearLayout.LayoutParams(dp(20), dp(28)));
+        }
+        root.addView(dots);
 
-        View spacer = new View(this);
-        root.addView(spacer, new LinearLayout.LayoutParams(1, 0, 1));
+        View lowerSpace = new View(this);
+        root.addView(lowerSpace, new LinearLayout.LayoutParams(1, 0, 1f));
 
-        Button start = new Button(this);
-        start.setText("시작하기  →");
-        start.setAllCaps(false);
-        start.setTextColor(NAVY);
-        start.setTextSize(16);
-        start.setTypeface(Typeface.DEFAULT_BOLD);
-        GradientDrawable startBg = new GradientDrawable();
-        startBg.setColor(Color.WHITE);
-        startBg.setCornerRadius(dp(18));
-        start.setBackground(startBg);
-        start.setOnClickListener(v -> showLoginScreen());
-        root.addView(start, new LinearLayout.LayoutParams(-1, dp(58)));
+        Button start = authPrimaryButton(store.hasCloudSession() ? "내 항로로 계속하기  →" : "시작하기  →");
+        start.setOnClickListener(v -> {
+            if (store.hasCloudSession() && store.hasProfile()) showApp(0); else showLoginScreen();
+        });
+        LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(-1, dp(58));
+        startParams.setMargins(0, 0, 0, dp(12));
+        root.addView(start, startParams);
 
-        TextView foot = new TextView(this);
-        foot.setText("국립해양박물관 · 해양교육 · NCS 진로 데이터 기반");
-        foot.setTextColor(Color.parseColor("#B9E8ED"));
+        Button preview = authOutlineButton("새 계정 만들기");
+        preview.setOnClickListener(v -> showRegisterScreen());
+        root.addView(preview, new LinearLayout.LayoutParams(-1, dp(52)));
+
+        TextView foot = authBody("로그인 또는 회원가입 후 맞춤 항로가 저장됩니다.");
         foot.setTextSize(11);
         foot.setGravity(Gravity.CENTER);
         foot.setPadding(0, dp(14), 0, 0);
@@ -213,43 +225,51 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showLoginScreen() {
-        ScrollView scroll = new ScrollView(this);
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(22), dp(18), dp(22), dp(28));
-        root.setBackgroundColor(BG);
-        scroll.addView(root);
-        setContentView(scroll);
+        root = oceanScrollableRoot(dp(22), dp(18), dp(22), dp(30));
 
-        OceanGraphicView graphic = new OceanGraphicView(this);
-        root.addView(graphic, new LinearLayout.LayoutParams(-1, dp(135)));
-        root.addView(title("BluePath 로그인"));
-        root.addView(body("로그인 후에만 홈·학습·퀴즈·일정·진로·AI·MY 항로를 이용할 수 있습니다."));
+        Button backTop = authTextButton("‹  시작 화면");
+        backTop.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        backTop.setOnClickListener(v -> showWelcomeScreen());
+        root.addView(backTop, new LinearLayout.LayoutParams(-1, dp(42)));
+
+        TextView waveMark = authWaveMark();
+        root.addView(waveMark, new LinearLayout.LayoutParams(-1, dp(82)));
+
+        TextView heading = authTitle("Welcome to BluePath");
+        heading.setGravity(Gravity.CENTER);
+        root.addView(heading);
+        TextView description = authBody("로그인하고 학습, 퀴즈, 일정, 진로, 해양 AI를 하나의 항로에서 이어가세요.");
+        description.setGravity(Gravity.CENTER);
+        description.setPadding(dp(12), 0, dp(12), dp(20));
+        root.addView(description);
 
         if (store.hasCloudSession()) {
-            LinearLayout sessionCard = card();
-            sessionCard.addView(label("SAVED SESSION"));
-            sessionCard.addView(big(store.getAccountDisplayName()));
-            sessionCard.addView(body(store.getAccountEmail() + " 계정으로 안전하게 계속할 수 있습니다."));
-            Button continueButton = primaryButton("이 계정으로 계속하기");
+            LinearLayout sessionCard = authCard();
+            sessionCard.addView(authLabel("SAVED SESSION"));
+            sessionCard.addView(authBig(store.getAccountDisplayName()));
+            sessionCard.addView(authBody(store.getAccountEmail() + " 계정으로 안전하게 계속할 수 있습니다."));
+            Button continueButton = authPrimaryButton("이 계정으로 계속하기");
             continueButton.setOnClickListener(v -> {
                 if (store.hasProfile()) showApp(0); else showOnboarding();
             });
-            sessionCard.addView(continueButton, new LinearLayout.LayoutParams(-1, dp(50)));
+            LinearLayout.LayoutParams continueParams = new LinearLayout.LayoutParams(-1, dp(52));
+            continueParams.setMargins(0, dp(10), 0, 0);
+            sessionCard.addView(continueButton, continueParams);
             root.addView(sessionCard);
-            root.addView(label("다른 계정으로 로그인"));
         }
 
-        LinearLayout form = card();
-        EditText email = inputField("email@example.com", store.getAccountEmail());
-        EditText password = inputField("8자 이상 비밀번호", "");
+        LinearLayout form = authCard();
+        form.addView(authLabel("SIGN IN"));
+        form.addView(authBig("나의 해양 항로 열기"));
+        EditText email = authInputField("email@example.com", store.getAccountEmail());
+        EditText password = authInputField("8자 이상 비밀번호", "");
         password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        form.addView(label("이메일"));
-        form.addView(email);
-        form.addView(label("비밀번호"));
-        form.addView(password);
+        form.addView(authLabel("이메일"));
+        form.addView(email, new LinearLayout.LayoutParams(-1, dp(52)));
+        form.addView(authLabel("비밀번호"));
+        form.addView(password, new LinearLayout.LayoutParams(-1, dp(52)));
 
-        Button login = primaryButton("로그인");
+        Button login = authPrimaryButton("로그인");
         login.setOnClickListener(v -> {
             String emailValue = email.getText().toString().trim();
             String passwordValue = password.getText().toString();
@@ -259,55 +279,64 @@ public class MainActivity extends AppCompatActivity {
             }
             viewModel.login(emailValue, passwordValue);
         });
-        LinearLayout.LayoutParams loginParams = new LinearLayout.LayoutParams(-1, dp(52));
-        loginParams.setMargins(0, dp(16), 0, dp(6));
+        LinearLayout.LayoutParams loginParams = new LinearLayout.LayoutParams(-1, dp(54));
+        loginParams.setMargins(0, dp(18), 0, dp(8));
         form.addView(login, loginParams);
 
-        Button forgot = outlineButton("비밀번호를 잊어버렸나요?");
+        Button forgot = authTextButton("비밀번호를 잊어버렸나요?");
+        forgot.setGravity(Gravity.CENTER);
         forgot.setOnClickListener(v -> showForgotPasswordScreen());
-        form.addView(forgot, new LinearLayout.LayoutParams(-1, dp(46)));
+        form.addView(forgot, new LinearLayout.LayoutParams(-1, dp(42)));
         root.addView(form);
 
-        LinearLayout signupCard = card();
-        signupCard.addView(big("처음 오셨나요?"));
-        signupCard.addView(body("회원가입 후 연령·관심 분야·목표를 설정하면 개인 맞춤 해양 항로가 생성됩니다."));
-        Button signup = outlineButton("회원가입");
+        LinearLayout signupCard = authCard();
+        TextView signupText = authBody("처음 오셨나요? 연령, 관심 분야, 목표에 맞춘 나만의 해양 항로를 만들어 보세요.");
+        signupText.setGravity(Gravity.CENTER);
+        signupCard.addView(signupText);
+        Button signup = authOutlineButton("회원가입");
         signup.setOnClickListener(v -> showRegisterScreen());
-        signupCard.addView(signup, new LinearLayout.LayoutParams(-1, dp(48)));
+        LinearLayout.LayoutParams signupParams = new LinearLayout.LayoutParams(-1, dp(50));
+        signupParams.setMargins(0, dp(8), 0, 0);
+        signupCard.addView(signup, signupParams);
         root.addView(signupCard);
 
-        Button back = outlineButton("이전 화면으로 돌아가기");
-        back.setOnClickListener(v -> showWelcomeScreen());
-        root.addView(back, new LinearLayout.LayoutParams(-1, dp(46)));
-
         if (!viewModel.isCloudConfigured()) {
-            root.addView(note("이 빌드에는 BLUEPATH_API_BASE_URL이 설정되지 않았습니다. 회원가입과 로그인을 사용하려면 서버 주소를 설정해 주세요.", DANGER));
+            TextView warning = authBody("개발 빌드에 BLUEPATH_API_BASE_URL이 설정되지 않았습니다. 서버 주소를 설정해야 회원가입과 로그인이 동작합니다.");
+            warning.setTextColor(Color.parseColor("#FFD6D1"));
+            warning.setTypeface(Typeface.DEFAULT_BOLD);
+            root.addView(warning);
         }
     }
 
     private void showRegisterScreen() {
-        ScrollView scroll = new ScrollView(this);
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(22), dp(24), dp(22), dp(28));
-        root.setBackgroundColor(BG);
-        scroll.addView(root);
-        setContentView(scroll);
+        root = oceanScrollableRoot(dp(22), dp(18), dp(22), dp(30));
 
-        root.addView(title("BluePath 회원가입"));
-        root.addView(body("계정을 만든 뒤 해양 인재 프로필을 설정합니다. 미성년 사용자의 보호자 동의는 프로필 설정 단계에서 이어집니다."));
-        LinearLayout form = card();
-        EditText email = inputField("email@example.com", "");
-        EditText password = inputField("8자 이상 비밀번호", "");
-        EditText confirm = inputField("비밀번호 다시 입력", "");
-        EditText guardian = inputField("보호자 이메일 (선택)", "");
+        Button backTop = authTextButton("‹  로그인");
+        backTop.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        backTop.setOnClickListener(v -> showLoginScreen());
+        root.addView(backTop, new LinearLayout.LayoutParams(-1, dp(42)));
+        root.addView(authWaveMark(), new LinearLayout.LayoutParams(-1, dp(72)));
+
+        TextView heading = authTitle("Create your BluePath");
+        heading.setGravity(Gravity.CENTER);
+        root.addView(heading);
+        TextView description = authBody("계정을 만든 뒤 관심 분야와 목표를 설정하면 맞춤형 해양 진로 항로가 생성됩니다.");
+        description.setGravity(Gravity.CENTER);
+        description.setPadding(dp(10), 0, dp(10), dp(20));
+        root.addView(description);
+
+        LinearLayout form = authCard();
+        EditText email = authInputField("email@example.com", "");
+        EditText password = authInputField("8자 이상 비밀번호", "");
+        EditText confirm = authInputField("비밀번호 다시 입력", "");
+        EditText guardian = authInputField("보호자 이메일 (선택)", "");
         password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         confirm.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        form.addView(label("이메일")); form.addView(email);
-        form.addView(label("비밀번호")); form.addView(password);
-        form.addView(label("비밀번호 확인")); form.addView(confirm);
-        form.addView(label("보호자 이메일")); form.addView(guardian);
-        Button create = primaryButton("계정 만들기");
+        form.addView(authLabel("이메일")); form.addView(email, new LinearLayout.LayoutParams(-1, dp(52)));
+        form.addView(authLabel("비밀번호")); form.addView(password, new LinearLayout.LayoutParams(-1, dp(52)));
+        form.addView(authLabel("비밀번호 확인")); form.addView(confirm, new LinearLayout.LayoutParams(-1, dp(52)));
+        form.addView(authLabel("보호자 이메일")); form.addView(guardian, new LinearLayout.LayoutParams(-1, dp(52)));
+        Button create = authPrimaryButton("계정 만들기");
         create.setOnClickListener(v -> {
             String emailValue = email.getText().toString().trim();
             String passwordValue = password.getText().toString();
@@ -321,31 +350,38 @@ public class MainActivity extends AppCompatActivity {
             }
             viewModel.register(emailValue, passwordValue, guardian.getText().toString().trim());
         });
-        LinearLayout.LayoutParams createParams = new LinearLayout.LayoutParams(-1, dp(52));
-        createParams.setMargins(0, dp(16), 0, 0);
+        LinearLayout.LayoutParams createParams = new LinearLayout.LayoutParams(-1, dp(54));
+        createParams.setMargins(0, dp(18), 0, 0);
         form.addView(create, createParams);
         root.addView(form);
-        Button back = outlineButton("로그인으로 돌아가기");
+
+        Button back = authOutlineButton("이미 계정이 있어요");
         back.setOnClickListener(v -> showLoginScreen());
-        root.addView(back, new LinearLayout.LayoutParams(-1, dp(48)));
+        root.addView(back, new LinearLayout.LayoutParams(-1, dp(50)));
     }
 
     private void showForgotPasswordScreen() {
-        ScrollView scroll = new ScrollView(this);
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(22), dp(26), dp(22), dp(28));
-        root.setBackgroundColor(BG);
-        scroll.addView(root);
-        setContentView(scroll);
+        root = oceanScrollableRoot(dp(22), dp(18), dp(22), dp(30));
 
-        root.addView(title("비밀번호 재설정"));
-        root.addView(body("가입한 이메일을 입력하면 안전한 일회용 재설정 링크를 보냅니다. 계정 존재 여부는 보안을 위해 화면에 구분해서 표시하지 않습니다."));
-        LinearLayout form = card();
-        EditText email = inputField("email@example.com", store.getAccountEmail());
-        form.addView(label("가입 이메일"));
-        form.addView(email);
-        Button request = primaryButton("재설정 안내 보내기");
+        Button backTop = authTextButton("‹  로그인");
+        backTop.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        backTop.setOnClickListener(v -> showLoginScreen());
+        root.addView(backTop, new LinearLayout.LayoutParams(-1, dp(42)));
+        root.addView(authWaveMark(), new LinearLayout.LayoutParams(-1, dp(80)));
+
+        TextView heading = authTitle("Reset your password");
+        heading.setGravity(Gravity.CENTER);
+        root.addView(heading);
+        TextView description = authBody("가입한 이메일을 입력하면 안전한 일회용 재설정 링크를 보내드립니다.");
+        description.setGravity(Gravity.CENTER);
+        description.setPadding(dp(10), 0, dp(10), dp(22));
+        root.addView(description);
+
+        LinearLayout form = authCard();
+        EditText email = authInputField("email@example.com", store.getAccountEmail());
+        form.addView(authLabel("가입 이메일"));
+        form.addView(email, new LinearLayout.LayoutParams(-1, dp(52)));
+        Button request = authPrimaryButton("재설정 안내 보내기");
         request.setOnClickListener(v -> {
             String value = email.getText().toString().trim();
             if (value.isEmpty() || !value.contains("@")) {
@@ -354,13 +390,14 @@ public class MainActivity extends AppCompatActivity {
             }
             viewModel.requestPasswordReset(value);
         });
-        LinearLayout.LayoutParams requestParams = new LinearLayout.LayoutParams(-1, dp(52));
-        requestParams.setMargins(0, dp(16), 0, 0);
+        LinearLayout.LayoutParams requestParams = new LinearLayout.LayoutParams(-1, dp(54));
+        requestParams.setMargins(0, dp(18), 0, 0);
         form.addView(request, requestParams);
         root.addView(form);
-        Button back = outlineButton("로그인으로 돌아가기");
+
+        Button back = authOutlineButton("로그인으로 돌아가기");
         back.setOnClickListener(v -> showLoginScreen());
-        root.addView(back, new LinearLayout.LayoutParams(-1, dp(48)));
+        root.addView(back, new LinearLayout.LayoutParams(-1, dp(50)));
     }
 
     private void showOnboarding() {
@@ -368,32 +405,29 @@ public class MainActivity extends AppCompatActivity {
             showLoginScreen();
             return;
         }
-        ScrollView scroll = new ScrollView(this);
-        root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(22), dp(22), dp(22), dp(28));
-        root.setBackgroundColor(BG);
-        scroll.addView(root);
-        setContentView(scroll);
+        root = oceanScrollableRoot(dp(22), dp(18), dp(22), dp(30));
+        root.addView(authWaveMark(), new LinearLayout.LayoutParams(-1, dp(78)));
 
-        OceanGraphicView graphic = new OceanGraphicView(this);
-        root.addView(graphic, new LinearLayout.LayoutParams(-1, dp(150)));
-
-        TextView title = title("BluePath\n스마트 해도 AI");
-        root.addView(title);
-        root.addView(body("해양 콘텐츠, 역량 진단, 실제 교육 일정과 NCS 진로 로드맵을 하나의 항해 경로로 연결합니다. 첫 항로를 만들기 위해 해양 인재 프로필을 설정하세요."));
+        TextView heading = authTitle("나의 스마트 해도 만들기");
+        heading.setGravity(Gravity.CENTER);
+        root.addView(heading);
+        TextView description = authBody("연령, 관심 분야, 학습 목적과 현재 수준을 선택하면 첫 번째 맞춤 항로를 설계합니다.");
+        description.setGravity(Gravity.CENTER);
+        description.setPadding(dp(8), 0, dp(8), dp(20));
+        root.addView(description);
 
         Spinner age = spinner(new String[]{"초등학생", "중학생", "고등학생", "대학생", "성인", "직장인", "학부모/가족"});
         Spinner interest = spinner(new String[]{"해양환경", "해양생물", "항해", "선박", "독도·해양문화", "해양안전", "항만·물류"});
         Spinner goal = spinner(new String[]{"흥미", "체험", "진로탐색", "자격증", "직무역량 강화", "가족 교육"});
         Spinner level = spinner(new String[]{"입문", "기초", "중급", "심화", "실무"});
 
-        root.addView(label("연령대")); root.addView(age);
-        root.addView(label("관심 분야")); root.addView(interest);
-        root.addView(label("학습 목적")); root.addView(goal);
-        root.addView(label("현재 수준")); root.addView(level);
+        LinearLayout form = authCard();
+        form.addView(authLabel("연령대")); form.addView(age);
+        form.addView(authLabel("관심 분야")); form.addView(interest);
+        form.addView(authLabel("학습 목적")); form.addView(goal);
+        form.addView(authLabel("현재 수준")); form.addView(level);
 
-        Button start = primaryButton("나의 해양 인재 DNA 시작하기");
+        Button start = authPrimaryButton("나의 해양 인재 DNA 시작하기");
         start.setOnClickListener(v -> {
             String a = age.getSelectedItem().toString();
             String i = interest.getSelectedItem().toString();
@@ -407,9 +441,10 @@ public class MainActivity extends AppCompatActivity {
                 showApp(0);
             }
         });
-        LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(-1, dp(52));
+        LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(-1, dp(54));
         startParams.setMargins(0, dp(18), 0, 0);
-        root.addView(start, startParams);
+        form.addView(start, startParams);
+        root.addView(form);
     }
 
     private void showApp(int tab) {
@@ -422,13 +457,14 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         currentTab = tab;
+        applyAppWindow();
         appRoot = new FrameLayout(this);
-        appRoot.setBackgroundColor(BG);
+        appRoot.setBackgroundResource(R.drawable.bg_app_surface);
         setContentView(appRoot);
 
         LinearLayout main = new LinearLayout(this);
         main.setOrientation(LinearLayout.VERTICAL);
-        main.setBackgroundColor(BG);
+        main.setBackgroundResource(R.drawable.bg_app_surface);
         appRoot.addView(main, new FrameLayout.LayoutParams(-1, -1));
 
         LinearLayout header = new LinearLayout(this);
@@ -1656,6 +1692,167 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage(PromotionRules.fullManual())
                 .setPositiveButton("확인", null)
                 .show();
+    }
+
+    private FrameLayout oceanFrame() {
+        applyOceanWindow();
+        FrameLayout frame = new FrameLayout(this);
+        frame.setBackgroundColor(Color.parseColor("#062D38"));
+
+        OceanBackgroundView ocean = new OceanBackgroundView(this);
+        frame.addView(ocean, new FrameLayout.LayoutParams(-1, -1));
+
+        View tint = new View(this);
+        tint.setBackgroundColor(Color.argb(30, 0, 25, 33));
+        frame.addView(tint, new FrameLayout.LayoutParams(-1, -1));
+        return frame;
+    }
+
+    private LinearLayout oceanScrollableRoot(int left, int top, int right, int bottom) {
+        FrameLayout screen = oceanFrame();
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setClipToPadding(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setGravity(Gravity.CENTER_HORIZONTAL);
+        layout.setPadding(left, top, right, bottom);
+        scroll.addView(layout, new ScrollView.LayoutParams(-1, -2));
+        screen.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(screen);
+        return layout;
+    }
+
+    private void applyOceanWindow() {
+        getWindow().setStatusBarColor(Color.parseColor("#073642"));
+        getWindow().setNavigationBarColor(Color.parseColor("#03262F"));
+        getWindow().getDecorView().setSystemUiVisibility(0);
+    }
+
+    private void applyAppWindow() {
+        getWindow().setStatusBarColor(NAVY);
+        getWindow().setNavigationBarColor(NAVY);
+        getWindow().getDecorView().setSystemUiVisibility(0);
+    }
+
+    private LinearLayout authCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(18), dp(16), dp(18), dp(16));
+        card.setBackgroundResource(R.drawable.bg_auth_card);
+        card.setElevation(dp(8));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.setMargins(0, 0, 0, dp(14));
+        card.setLayoutParams(params);
+        return card;
+    }
+
+    private EditText authInputField(String hint, String value) {
+        EditText field = new EditText(this);
+        field.setHint(hint);
+        field.setText(value == null ? "" : value);
+        field.setTextColor(Color.WHITE);
+        field.setHintTextColor(Color.parseColor("#A9CED1"));
+        field.setTextSize(14);
+        field.setSingleLine(true);
+        field.setSelectAllOnFocus(false);
+        field.setBackgroundResource(R.drawable.bg_auth_input);
+        field.setPadding(dp(14), 0, dp(14), 0);
+        return field;
+    }
+
+    private TextView authTitle(String text) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(Color.WHITE);
+        view.setTextSize(28);
+        view.setTypeface(Typeface.DEFAULT_BOLD);
+        view.setPadding(0, dp(6), 0, dp(10));
+        return view;
+    }
+
+    private TextView authBig(String text) {
+        TextView view = new TextView(this);
+        view.setText(text == null || text.trim().isEmpty() ? "BluePath 사용자" : text);
+        view.setTextColor(Color.WHITE);
+        view.setTextSize(18);
+        view.setTypeface(Typeface.DEFAULT_BOLD);
+        view.setPadding(0, dp(2), 0, dp(5));
+        return view;
+    }
+
+    private TextView authBody(String text) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(Color.parseColor("#D9F0F1"));
+        view.setTextSize(14);
+        view.setLineSpacing(dp(2), 1.08f);
+        view.setPadding(0, dp(3), 0, dp(6));
+        return view;
+    }
+
+    private TextView authLabel(String text) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(Color.parseColor("#A7E6E7"));
+        view.setTextSize(11);
+        view.setTypeface(Typeface.DEFAULT_BOLD);
+        view.setLetterSpacing(0.06f);
+        view.setPadding(0, dp(8), 0, dp(5));
+        return view;
+    }
+
+    private TextView authWaveMark() {
+        TextView mark = new TextView(this);
+        mark.setText("∿");
+        mark.setTextColor(Color.WHITE);
+        mark.setTextSize(72);
+        mark.setTypeface(Typeface.DEFAULT_BOLD);
+        mark.setGravity(Gravity.CENTER);
+        mark.setIncludeFontPadding(false);
+        return mark;
+    }
+
+    private Button authPrimaryButton(String text) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setTextColor(NAVY);
+        button.setTextSize(15);
+        button.setTypeface(Typeface.DEFAULT_BOLD);
+        button.setBackgroundResource(R.drawable.bg_auth_primary_button);
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setElevation(dp(3));
+        return button;
+    }
+
+    private Button authOutlineButton(String text) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setTextColor(Color.parseColor("#6FF4EF"));
+        button.setTextSize(14);
+        button.setTypeface(Typeface.DEFAULT_BOLD);
+        button.setBackgroundResource(R.drawable.bg_auth_outline_button);
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        return button;
+    }
+
+    private Button authTextButton(String text) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setTextColor(Color.parseColor("#D9F5F4"));
+        button.setTextSize(13);
+        button.setBackgroundColor(Color.TRANSPARENT);
+        button.setMinHeight(0);
+        button.setMinimumHeight(0);
+        button.setPadding(0, 0, 0, 0);
+        return button;
     }
 
     private Spinner spinner(String[] values) {
