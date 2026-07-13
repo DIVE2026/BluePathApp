@@ -734,7 +734,7 @@ public class MainActivity extends AppCompatActivity {
         UserProfile p = store.getProfile();
         String tier = store.getTier();
         content.addView(sectionTitle("난도별 해양 영상 라이브러리"));
-        content.addView(body("첨부 스프레드시트의 28개 영상을 모두 반영했습니다. 하 10개, 중 10개, 상 8개로 분류되며 추천 점수 안에서는 개인 관심 분야가 우선됩니다."));
+        content.addView(body("총 28개의 영상이 준비되어 있습니다. 난이도별로 하 10개, 중 10개, 상 8개로 구성되어 있으며, 추천 점수가 비슷한 경우에는 개인의 관심 분야를 우선하여 추천합니다."));
 
         List<ContentItem> all = RecommendationEngine.recommendedContents(p, tier, store);
         addDifficultySection("하", "입문 · " + PromotionRules.displayName("브론즈"), all);
