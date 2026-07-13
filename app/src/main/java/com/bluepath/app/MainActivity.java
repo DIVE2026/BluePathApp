@@ -1578,7 +1578,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderMyPage() {
-        addTabIntro("", "MY OCEAN PAGE", "MY · 나의 해양 여권", "닉네임, 프로필 사진, 하나로 통합된 티어, 학습 증거와 계정 설정을 관리합니다.");
+        addTabIntro("", "MY OCEAN PAGE", "MY · 나의 해양 여권", "학습과 계정 설정을 관리합니다.");
         UserProfile p = store.getProfile();
         String tier = store.getTier();
 
