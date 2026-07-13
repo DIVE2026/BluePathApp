@@ -53,7 +53,6 @@ The offline catalog includes the full extracted records from the provided sample
 | Verified offline quiz bank | 57 |
 | Visitor survey responses used for aggregate insights | 43 |
 
-Programs and events retain source labels and dates. Expired records are explicitly shown as **종료·아카이브** and are not presented as currently available enrollment opportunities.
 
 ## Explainable Recommendation Route
 

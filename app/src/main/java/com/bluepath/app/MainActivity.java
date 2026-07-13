@@ -984,8 +984,6 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout dataCard = card();
         dataCard.addView(big("교육 과정 " + programs.size() + "개 · 행사 " + events.size() + "개"));
-        dataCard.addView(body("전체 데이터는 추천 계산과 AI 근거에 사용됩니다. 화면에는 탐색성을 위해 우선순위가 높은 항목을 먼저 표시합니다."));
-        dataCard.addView(note("종료된 일정은 현재 모집 중인 과정처럼 보이지 않도록 ‘종료·아카이브’로 명확히 구분합니다.", OCEAN));
         content.addView(dataCard);
 
         content.addView(sectionTitle("교육 프로그램 스케줄"));
