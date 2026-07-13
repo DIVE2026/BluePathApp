@@ -6,7 +6,7 @@ BluePath is an Android learning and career-navigation platform that converts mar
 
 <div align="center">
 
-[Product Specification](docs/APP_SPEC.md) · [Developer Setup](docs/DEVELOPER_SETUP.md) · [Marine AI Setup](docs/MARINE_LLM_SETUP.md) · [Fine-Tuning Guide](docs/FINE_TUNING_GUIDE.md)
+[Product Specification](docs/APP_SPEC.md) · [Developer Setup](docs/DEVELOPER_SETUP.md) · [1.3 Upgrade](docs/BLUEPATH_1_3_UPGRADE.md) · [Marine AI Setup](docs/MARINE_LLM_SETUP.md) · [Fine-Tuning Guide](docs/FINE_TUNING_GUIDE.md)
 
 </div>
 
@@ -18,9 +18,22 @@ The learner experience now follows a commercial-app style entry flow:
 2. Sign-in, account creation, or password-reset request
 3. First-time ocean-talent profile setup
 4. The authenticated app shell with a collapsible sidebar
-5. Home, Learning, Quiz, Schedule, Career, AI, and MY
+5. AI Career Counseling, Home, Learning Materials, Quiz, Schedule, Ocean Community, and MY
 
 The bottom navigation has been removed. Every tab begins with a designed introduction panel that explains what the tab is for and how its data is used.
+
+
+## BluePath 1.3 Social and AI Experience
+
+- Ocean Community with free/question boards, nested replies, emoji reactions, and following
+- Required unique nicknames and shared profile images across Home, MY, and Community
+- One unified tier visualized as a large colored shield, progress gauge, and promotion animation
+- GitHub-style sky-blue activity heatmap for learning and community participation
+- Natural-language LLM search directly below the Learning Materials and Schedule introductions
+- AI Career Counseling at the top of navigation, combining app RAG with optional live Tavily/Brave retrieval
+- Learning Materials split into Video and an intentionally empty Paper tab
+
+See [BluePath 1.3 Upgrade](docs/BLUEPATH_1_3_UPGRADE.md) for migration and provider configuration.
 
 ## What Makes BluePath Different
 
@@ -95,12 +108,12 @@ The **MY** tab displays mastery and evidence counts for marine environment, mari
 
 MY is an authenticated personal ocean passport, not a login screen. It includes:
 
-- Integrated tier, XP tier, and quiz tier
+- One unified tier with a tier-colored shield and progress gauge
 - Verified learning completions
 - Saved resources and opportunities
 - Topic mastery progress bars
 - Quiz attempts and best scores
-- Profile editing
+- Nickname-based profile, profile-image upload, follower/following counts, and profile editing
 - Cloud synchronization and catalog refresh
 - Learning and qualification reminders
 - Guardian consent management
@@ -153,12 +166,12 @@ Production deployments must configure HTTPS for `PASSWORD_RESET_BASE_URL` and tr
 
 The app shell uses a closable left sidebar with these entries:
 
+- **AI 진로 상담**
 - 홈
-- 학습
+- 학습 자료 (영상 / 논문)
 - 퀴즈
 - 일정
-- 진로
-- AI
+- 해양 커뮤니티 (자유 / 질문)
 - **MY**
 
 The sidebar includes the signed-in account identity and can be dismissed by the close button or background scrim.
@@ -196,6 +209,7 @@ pytest -q backend/tests/test_api.py
 | --- | --- |
 | [Product Specification](docs/APP_SPEC.md) | Product definition, target users, core learner flow, tier system, recommendation model, and AI Agent examples |
 | [Developer Setup](docs/DEVELOPER_SETUP.md) | Android API configuration, backend environment setup, administrator workflow, YouTube synchronization, and test commands |
+| [BluePath 1.3 Upgrade](docs/BLUEPATH_1_3_UPGRADE.md) | Community, nickname, unified tier, profile image, activity heatmap, natural-language search, live-web AI configuration, and migration notes |
 | [Marine AI Setup](docs/MARINE_LLM_SETUP.md) | Overview of the server-side marine AI architecture, RAG grounding, quiz validation, and offline fallback behavior |
 | [Fine-Tuning Guide](docs/FINE_TUNING_GUIDE.md) | Dataset generation, LoRA training, evaluation, model serving, backend integration, and production release checklist |
 
