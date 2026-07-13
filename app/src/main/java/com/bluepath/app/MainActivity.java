@@ -751,8 +751,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderHome() {
-        addTabIntro("🧭", "TODAY'S ROUTE", "홈 · 오늘의 항로", "닉네임, 하나로 통합된 티어, 팔로우 관계와 최근 활동 흐름을 한눈에 확인합니다.");
-        maybeRefreshDashboard();
+        addTabIntro(
+                "",
+                "TODAY'S ROUTE",
+                "홈 · 오늘의 항로",
+                "닉네임, 하나로 통합된 티어, 팔로우 관계와 최근 활동 흐름을 확인합니다."
+        );        maybeRefreshDashboard();
         UserProfile p = store.getProfile();
         String tier = store.getTier();
         int xp = p.xp;
