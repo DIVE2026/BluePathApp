@@ -170,7 +170,7 @@ The app shell uses a closable left sidebar with these entries:
 - 학습 자료 (영상 / 논문)
 - 퀴즈
 - 일정
-- 해양 커뮤니티 (자유 / 질문)
+- 해양 커뮤니티 (자유 게시판/ 질문 게시판)
 - **MY**
 
 The sidebar includes the signed-in account identity and can be dismissed by the close button or background scrim.
