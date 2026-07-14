@@ -2631,7 +2631,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void addAiSearchBox(String resourceType, String hint, boolean loading, ApiModels.AiSearchResponse response) {
         LinearLayout searchCard = card();
-        searchCard.addView(label("LLM 기반 자연어 검색"));
+        searchCard.addView(label("LLM 기반 검색"));
         EditText input = inputField(hint, "");
         input.setSingleLine(false);
         input.setMinLines(2);
