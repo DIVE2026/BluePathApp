@@ -1205,7 +1205,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void renderSchedule() {
         addTabIntro("", "LIVE & ARCHIVE", "일정 · 교육 탐색", "자연어로 원하는 일정 조건을 입력하면 관련 교육·행사 자료를 우선 추려 보여줍니다.");
-        addAiSearchBox("schedule", "예: 부산에서 고등학생이 여름방학에 참여할 해양 안전 교육", scheduleSearchLoading, scheduleSearchResponse);
+        addAiSearchBox("schedule", "예: 부산에서 고등학생이 여름방학에 참여할 해양 안전 교육이 있을까?", scheduleSearchLoading, scheduleSearchResponse);
         if (scheduleSearchResponse != null && scheduleSearchResponse.items != null && !scheduleSearchResponse.items.isEmpty()) {
             content.addView(sectionTitle("AI 일정 검색 결과"));
             content.addView(body(scheduleSearchResponse.summary));
