@@ -882,7 +882,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void renderLearning() {
         addTabIntro("", "LEARNING LIBRARY", "학습 자료 · 맞춤 콘텐츠", "자연어로 필요한 자료를 검색하고 영상과 논문을 구분해 탐색합니다.");
-        addAiSearchBox(learningSubTab, "예: 해양환경 입문자가 20분 안에 볼 만한 영상이나 논문", learningSearchLoading, learningSearchResponse);
+        addAiSearchBox(learningSubTab, "예: 해양환경 입문자가 20분 안에 볼 만한 영상이나 논문 찾아줘", learningSearchLoading, learningSearchResponse);
 
         LinearLayout tabs = row();
         Button videoTab = learningSubTab.equals("video") ? primaryButton("영상") : outlineButton("영상");
