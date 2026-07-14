@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.provider.CalendarContract;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -113,6 +114,70 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean agentLoading = false;
     private String agentLastAnswer = "질문을 입력하면 해양 AI가 학습·승급·진로 경로를 안내합니다. 온라인 답변에는 근거 자료가 함께 표시됩니다.";
+
+    /**
+     * 커뮤니티 화면 전용 당겨서 새로고침 스크롤뷰입니다.
+     * 별도의 SwipeRefreshLayout 의존성 없이 화면 최상단에서 아래로 충분히 당긴 뒤
+     * 손을 놓으면 커뮤니티 목록을 다시 불러옵니다.
+     */
+    private class CommunityRefreshScrollView extends ScrollView {
+        private float pullStartY;
+        private boolean pullCandidate;
+        private boolean refreshArmed;
+
+        CommunityRefreshScrollView() {
+            super(MainActivity.this);
+            setFillViewport(true);
+            setOverScrollMode(View.OVER_SCROLL_ALWAYS);
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent event) {
+            boolean triggerRefresh = false;
+
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    pullStartY = event.getY();
+                    pullCandidate = getScrollY() == 0 && !communityLoading;
+                    refreshArmed = false;
+                    break;
+
+                case MotionEvent.ACTION_MOVE:
+                    // 목록 중간에서 위로 올라온 경우, 최상단에 닿은 지점부터 당김 거리를 다시 잽니다.
+                    if (!pullCandidate && getScrollY() == 0 && !communityLoading) {
+                        pullCandidate = true;
+                        pullStartY = event.getY();
+                    }
+                    if (pullCandidate) {
+                        float pulledDistance = event.getY() - pullStartY;
+                        refreshArmed = getScrollY() == 0 && pulledDistance >= dp(84);
+                    }
+                    break;
+
+                case MotionEvent.ACTION_UP:
+                    triggerRefresh = pullCandidate
+                            && refreshArmed
+                            && getScrollY() == 0
+                            && currentTab == 5
+                            && !communityLoading;
+                    pullCandidate = false;
+                    refreshArmed = false;
+                    break;
+
+                case MotionEvent.ACTION_CANCEL:
+                    pullCandidate = false;
+                    refreshArmed = false;
+                    break;
+            }
+
+            boolean handled = super.dispatchTouchEvent(event);
+            if (triggerRefresh) {
+                // 터치 이벤트 처리가 끝난 뒤 화면을 다시 그리도록 예약합니다.
+                post(MainActivity.this::requestCommunityRefresh);
+            }
+            return handled;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -594,11 +659,18 @@ public class MainActivity extends AppCompatActivity {
 
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(14), dp(12), dp(14), dp(22));
-        ScrollView scroll = new ScrollView(this);
+        // 커뮤니티에서는 우측 하단 글쓰기 버튼과 게시글이 겹치지 않도록 여백을 확보합니다.
+        content.setPadding(dp(14), dp(12), dp(14), tab == 5 ? dp(104) : dp(22));
+
+        ScrollView scroll = tab == 5
+                ? new CommunityRefreshScrollView()
+                : new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.addView(content);
         main.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+
+        // 커뮤니티 탭에서만 우측 하단 플로팅 글쓰기 버튼을 표시합니다.
+        if (tab == 5) addCommunityWriteFab();
 
         sidebarScrim = new View(this);
         sidebarScrim.setBackgroundColor(Color.parseColor("#7706223F"));
@@ -1310,8 +1382,59 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 커뮤니티 우측 하단의 플로팅 글쓰기 버튼입니다.
+     * 원형 + 아이콘과 "글쓰기" 라벨을 하나의 말풍선형 버튼으로 구성합니다.
+     */
+    private void addCommunityWriteFab() {
+        LinearLayout writeFab = new LinearLayout(this);
+        writeFab.setOrientation(LinearLayout.HORIZONTAL);
+        writeFab.setGravity(Gravity.CENTER_VERTICAL);
+        writeFab.setPadding(dp(8), 0, dp(18), 0);
+        writeFab.setClickable(true);
+        writeFab.setFocusable(true);
+        writeFab.setContentDescription("커뮤니티 글쓰기");
+        writeFab.setElevation(dp(10));
+
+        GradientDrawable fabBackground = new GradientDrawable();
+        fabBackground.setColor(OCEAN);
+        fabBackground.setCornerRadius(dp(30));
+        fabBackground.setStroke(dp(1), Color.parseColor("#66FFFFFF"));
+        writeFab.setBackground(fabBackground);
+
+        TextView plus = new TextView(this);
+        plus.setText("+");
+        plus.setTextColor(OCEAN);
+        plus.setTextSize(24);
+        plus.setTypeface(Typeface.DEFAULT_BOLD);
+        plus.setGravity(Gravity.CENTER);
+        plus.setIncludeFontPadding(false);
+
+        GradientDrawable plusBackground = new GradientDrawable();
+        plusBackground.setShape(GradientDrawable.OVAL);
+        plusBackground.setColor(Color.WHITE);
+        plus.setBackground(plusBackground);
+        writeFab.addView(plus, new LinearLayout.LayoutParams(dp(40), dp(40)));
+
+        TextView label = new TextView(this);
+        label.setText("글쓰기");
+        label.setTextColor(Color.WHITE);
+        label.setTextSize(15);
+        label.setTypeface(Typeface.DEFAULT_BOLD);
+        label.setGravity(Gravity.CENTER_VERTICAL);
+        label.setPadding(dp(10), 0, 0, 0);
+        writeFab.addView(label, new LinearLayout.LayoutParams(-2, -1));
+
+        writeFab.setOnClickListener(v -> showCommunityPostDialog());
+
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                dp(132), dp(58), Gravity.END | Gravity.BOTTOM);
+        params.setMargins(dp(16), dp(16), dp(18), dp(24));
+        appRoot.addView(writeFab, params);
+    }
+
     private void renderCommunity() {
-        addTabIntro("", "OCEAN COMMUNITY", "해양 커뮤니티", "자유 게시판과 질문 게시판에서 글·댓글·대댓글을 작성하고 다양한 이모지로 공감하며 서로 팔로우할 수 있습니다.");
+        addTabIntro("", "OCEAN COMMUNITY", "해양 커뮤니티", "자유 게시판과 질문 게시판에서 여러 유저와 소통하여 함께 성장할 수 있습니다.");
 
         LinearLayout tabs = row();
         Button free = "free".equals(communityCategory) ? primaryButton("자유 게시판") : outlineButton("자유 게시판");
@@ -1325,19 +1448,6 @@ public class MainActivity extends AppCompatActivity {
         right.setMargins(dp(5), 0, 0, 0);
         tabs.addView(question, right);
         content.addView(tabs);
-
-        LinearLayout actions = row();
-        Button write = primaryButton("새 글 작성");
-        write.setOnClickListener(v -> showCommunityPostDialog());
-        Button refresh = outlineButton("새로고침");
-        refresh.setOnClickListener(v -> requestCommunityRefresh());
-        LinearLayout.LayoutParams writeParams = new LinearLayout.LayoutParams(0, dp(46), 1);
-        writeParams.setMargins(0, dp(10), dp(5), dp(10));
-        actions.addView(write, writeParams);
-        LinearLayout.LayoutParams refreshParams = new LinearLayout.LayoutParams(0, dp(46), 1);
-        refreshParams.setMargins(dp(5), dp(10), 0, dp(10));
-        actions.addView(refresh, refreshParams);
-        content.addView(actions);
 
         if (communityLoading) {
             LinearLayout loading = card();
