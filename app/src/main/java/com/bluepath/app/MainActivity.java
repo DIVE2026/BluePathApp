@@ -51,6 +51,7 @@ import com.bluepath.app.util.RecommendationEngine;
 import com.bluepath.app.view.ActivityHeatmapView;
 import com.bluepath.app.view.OceanBackgroundView;
 import com.bluepath.app.view.TierShieldView;
+import com.bluepath.app.view.TierTextFormatter;
 import com.bluepath.app.viewmodel.BluePathViewModel;
 import com.bumptech.glide.Glide;
 
@@ -806,6 +807,7 @@ public class MainActivity extends AppCompatActivity {
         heatmapScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         heatmapScroll.addView(heatmap, new FrameLayout.LayoutParams(-2, -2));
         heatCard.addView(heatmapScroll, new LinearLayout.LayoutParams(-1, dp(188)));
+        heatCard.addView(label("적음  ▫  ▪  ▪  ▪  ■  많음"));
         heatCard.addView(label("연도별 보기 · 가입 연도부터"));
 
         HorizontalScrollView yearScroll = new HorizontalScrollView(this);
@@ -1290,7 +1292,7 @@ public class MainActivity extends AppCompatActivity {
                     UserProfile profile = store.getProfile();
                     answer = llmClient.answerAgent(trimmed, profile, store.getTier(),
                             RecommendationEngine.recommendedContents(profile, store.getTier(), store),
-                            PromotionRules.fullManual());
+                            PromotionRules.fullManualPlain());
                 } catch (Exception e) {
                     answer = "LLM 호출에 실패해 로컬 상담으로 전환했습니다.\n\n"
                             + RecommendationEngine.answerAgent(trimmed, store.getProfile(), store.getTier())
@@ -2201,7 +2203,7 @@ public class MainActivity extends AppCompatActivity {
     private void showPromotionManual() {
         new AlertDialog.Builder(this)
                 .setTitle("BluePath 승급 매뉴얼")
-                .setMessage(plainTierCopy(PromotionRules.fullManual()))
+                .setMessage(tierText(PromotionRules.fullManual()))
                 .setPositiveButton("확인", null)
                 .show();
     }
@@ -2277,7 +2279,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView authTitle(String text) {
         TextView view = new TextView(this);
-        view.setText(text);
+        view.setText(tierText(text));
         view.setTextColor(Color.WHITE);
         view.setTextSize(28);
         view.setTypeface(Typeface.DEFAULT_BOLD);
@@ -2287,7 +2289,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView authBig(String text) {
         TextView view = new TextView(this);
-        view.setText(text == null || text.trim().isEmpty() ? "BluePath 사용자" : text);
+        view.setText(tierText(text == null || text.trim().isEmpty() ? "BluePath 사용자" : text));
         view.setTextColor(Color.WHITE);
         view.setTextSize(18);
         view.setTypeface(Typeface.DEFAULT_BOLD);
@@ -2297,7 +2299,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView authBody(String text) {
         TextView view = new TextView(this);
-        view.setText(text);
+        view.setText(tierText(text));
         view.setTextColor(Color.parseColor("#D9F0F1"));
         view.setTextSize(14);
         view.setLineSpacing(dp(2), 1.08f);
@@ -2307,7 +2309,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView authLabel(String text) {
         TextView view = new TextView(this);
-        view.setText(text);
+        view.setText(tierText(text));
         view.setTextColor(Color.parseColor("#A7E6E7"));
         view.setTextSize(11);
         view.setTypeface(Typeface.DEFAULT_BOLD);
@@ -2329,7 +2331,7 @@ public class MainActivity extends AppCompatActivity {
 
     private Button authPrimaryButton(String text) {
         Button button = new Button(this);
-        button.setText(text);
+        button.setText(tierText(text));
         button.setAllCaps(false);
         button.setTextColor(NAVY);
         button.setTextSize(15);
@@ -2343,7 +2345,7 @@ public class MainActivity extends AppCompatActivity {
 
     private Button authOutlineButton(String text) {
         Button button = new Button(this);
-        button.setText(text);
+        button.setText(tierText(text));
         button.setAllCaps(false);
         button.setTextColor(Color.parseColor("#6FF4EF"));
         button.setTextSize(14);
@@ -2356,7 +2358,7 @@ public class MainActivity extends AppCompatActivity {
 
     private Button authTextButton(String text) {
         Button button = new Button(this);
-        button.setText(text);
+        button.setText(tierText(text));
         button.setAllCaps(false);
         button.setTextColor(Color.parseColor("#D9F5F4"));
         button.setTextSize(13);
@@ -2399,7 +2401,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView sectionTitle(String text) {
         TextView v = new TextView(this);
-        v.setText(text);
+        v.setText(tierText(text));
         v.setTextColor(NAVY);
         v.setTextSize(20);
         v.setTypeface(Typeface.DEFAULT_BOLD);
@@ -2409,7 +2411,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView title(String text) {
         TextView v = new TextView(this);
-        v.setText(text);
+        v.setText(tierText(text));
         v.setTextColor(NAVY);
         v.setTextSize(29);
         v.setTypeface(Typeface.DEFAULT_BOLD);
@@ -2419,7 +2421,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView huge(String text) {
         TextView v = new TextView(this);
-        v.setText(text);
+        v.setText(tierText(text));
         v.setTextColor(NAVY);
         v.setTextSize(34);
         v.setTypeface(Typeface.DEFAULT_BOLD);
@@ -2429,7 +2431,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView big(String text) {
         TextView v = new TextView(this);
-        v.setText(text);
+        v.setText(tierText(text));
         v.setTextColor(TEXT);
         v.setTextSize(17);
         v.setTypeface(Typeface.DEFAULT_BOLD);
@@ -2439,7 +2441,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView body(String text) {
         TextView v = new TextView(this);
-        v.setText(text);
+        v.setText(tierText(text));
         v.setTextColor(TEXT);
         v.setTextSize(14);
         v.setLineSpacing(dp(2), 1.05f);
@@ -2449,7 +2451,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView label(String text) {
         TextView v = new TextView(this);
-        v.setText(text);
+        v.setText(tierText(text));
         v.setTextColor(MUTED);
         v.setTextSize(12);
         v.setTypeface(Typeface.DEFAULT_BOLD);
@@ -2462,6 +2464,10 @@ public class MainActivity extends AppCompatActivity {
         v.setTextColor(color);
         v.setTypeface(Typeface.DEFAULT_BOLD);
         return v;
+    }
+
+    private CharSequence tierText(String text) {
+        return TierTextFormatter.format(this, text);
     }
 
     private TierShieldView tierShield(String tier) {
@@ -2514,6 +2520,7 @@ public class MainActivity extends AppCompatActivity {
 
     private String plainTierCopy(String text) {
         if (text == null || text.isEmpty()) return "";
+        text = PromotionRules.stripShieldMarkers(text);
         StringBuilder result = new StringBuilder();
         for (int index = 0; index < text.length();) {
             int codePoint = text.codePointAt(index);
@@ -2566,7 +2573,7 @@ public class MainActivity extends AppCompatActivity {
 
     private Button primaryButton(String text) {
         Button b = new Button(this);
-        b.setText(text);
+        b.setText(tierText(text));
         b.setAllCaps(false);
         b.setTextColor(Color.WHITE);
         b.setTextSize(14);
@@ -2579,7 +2586,7 @@ public class MainActivity extends AppCompatActivity {
 
     private Button outlineButton(String text) {
         Button b = new Button(this);
-        b.setText(text);
+        b.setText(tierText(text));
         b.setAllCaps(false);
         b.setTextColor(NAVY);
         b.setTextSize(13);
@@ -2793,7 +2800,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void toast(String message) {
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+        Toast.makeText(this, tierText(message), Toast.LENGTH_LONG).show();
     }
 
     private int dp(int value) {
