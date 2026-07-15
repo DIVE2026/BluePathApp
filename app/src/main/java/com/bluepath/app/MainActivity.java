@@ -115,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
     private int quizAwardedXp = 0;
 
     private boolean agentLoading = false;
-    private String agentLastAnswer = "질문을 입력하면 해양 AI가 학습·승급·진로 경로를 안내합니다. 온라인 답변에는 근거 자료가 함께 표시됩니다.";
+    private String agentLastAnswer = "질문을 입력하면 BluePath AI가 상세한 답변을 제공합니다. 온라인 정보를 활용한 답변에는 참고한 근거 자료도 함께 표시됩니다.";
 
     /**
      * 커뮤니티 화면 전용 당겨서 새로고침 스크롤뷰입니다.
@@ -1347,7 +1347,6 @@ public class MainActivity extends AppCompatActivity {
         content.addView(ask, askParams);
 
         LinearLayout answerCard = card();
-        answerCard.addView(label("AI · LOCAL RAG · OPTIONAL LIVE WEB"));
         if (agentLoading) {
             answerCard.addView(big("여러 자료를 검토해 답변을 구성하고 있습니다"));
             answerCard.addView(new ProgressBar(this));
