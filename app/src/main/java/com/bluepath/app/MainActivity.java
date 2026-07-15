@@ -1731,7 +1731,6 @@ public class MainActivity extends AppCompatActivity {
         Button uploadPhoto = outlineButton("프로필 사진 업로드");
         uploadPhoto.setOnClickListener(v -> profileImagePicker.launch(new String[]{"image/jpeg", "image/png", "image/webp"}));
         profileCard.addView(uploadPhoto, new LinearLayout.LayoutParams(-1, dp(46)));
-        profileCard.addView(body("처음에는 닉네임 기반의 랜덤 컬러 기본 프로필이 표시되며, 업로드한 사진은 홈과 커뮤니티에도 동일하게 적용됩니다."));
         content.addView(profileCard);
 
         LinearLayout stats = row();
