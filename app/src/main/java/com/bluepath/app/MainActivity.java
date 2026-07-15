@@ -1039,7 +1039,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderQuiz() {
-        addTabIntro("", "SKILL CHECK", "퀴즈 · 역량 진단", "승급 점수만 확인하는 것이 아니라 문항별 주제를 역량 증거로 저장해 다음 학습과 진로 추천을 정교하게 만듭니다.");
+        addTabIntro("", "SKILL CHECK", "퀴즈 · 역량 진단", "퀴즈 결과는 단순히 승급 점수만 보여주는 데 그치지 않습니다. 문항별로 어떤 주제에 강하고 부족한지 분석해, 다음 학습과 진로 추천에 반영합니다.");
         String currentTier = store.getTier();
         content.addView(sectionTitle("AI 승급 퀴즈"));
         LinearLayout currentTierCard = card();
