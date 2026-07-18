@@ -273,3 +273,163 @@ class AdminQuizItem(CamelModel):
     sourceTitle: str = ""
     sourceUrl: str = ""
     active: bool = True
+
+
+class RoutePlanRequest(CamelModel):
+    targetCareer: str = Field(default="해양환경 교육 기획자", min_length=2, max_length=200)
+    routeType: str = Field(
+        default="balanced",
+        pattern="^(balanced|fastest|experience|family|career|weekend|free)$",
+    )
+    profile: dict[str, Any] = Field(default_factory=dict)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    maxNodes: int = Field(default=5, ge=3, le=7)
+
+
+class RouteNodeItem(CamelModel):
+    id: str
+    order: int
+    nodeType: str
+    targetId: str = ""
+    title: str
+    description: str = ""
+    source: str = ""
+    topic: str = "해양교육"
+    minutes: int = 0
+    expectedSkillGain: int = 0
+    readinessGain: int = 0
+    scheduleStatus: str = "available"
+    availabilityLabel: str = "지금 시작 가능"
+    ncsCompetencies: list[str] = Field(default_factory=list)
+    whyThisOrder: str = ""
+    recommendationReasons: list[str] = Field(default_factory=list)
+    evidenceBasis: list[str] = Field(default_factory=list)
+    actionLabel: str = "시작하기"
+    actionUrl: str = ""
+    completed: bool = False
+
+
+class RoutePlanResponse(CamelModel):
+    routeId: str
+    targetCareer: str
+    routeType: str
+    summary: str
+    coachMessage: str = ""
+    currentSkillTopic: str
+    currentMastery: int
+    tier: str
+    readinessBefore: int
+    readinessAfter: int
+    estimatedMinutes: int
+    estimatedDays: int
+    generatedBy: str = "rules"
+    nodes: list[RouteNodeItem] = Field(default_factory=list)
+    alternatives: list[str] = Field(default_factory=list)
+    sources: list[SourceItem] = Field(default_factory=list)
+
+
+class RouteSimulationRequest(CamelModel):
+    routeId: str | None = None
+    nodeId: str | None = None
+    activityTitle: str = Field(default="", max_length=300)
+    skillTopic: str = Field(default="해양교육", max_length=120)
+    expectedSkillGain: int = Field(default=5, ge=0, le=30)
+    readinessGain: int = Field(default=4, ge=0, le=30)
+    profile: dict[str, Any] = Field(default_factory=dict)
+
+
+class RouteSimulationResponse(CamelModel):
+    activityTitle: str
+    skillTopic: str
+    masteryBefore: int
+    masteryAfter: int
+    readinessBefore: int
+    readinessAfter: int
+    weakItemsBefore: int
+    weakItemsAfter: int
+    nextRecommendation: str
+    explanation: str
+    confidence: int = Field(ge=0, le=100)
+    evidenceBasis: list[str] = Field(default_factory=list)
+
+
+class RouteRerouteRequest(CamelModel):
+    routeId: str | None = None
+    blockedNodeId: str | None = None
+    reason: str = Field(default="schedule_conflict", max_length=120)
+    profile: dict[str, Any] = Field(default_factory=dict)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+
+
+class MissionGenerateRequest(CamelModel):
+    exhibitCode: str = Field(default="submersible", min_length=2, max_length=120)
+    exhibitTitle: str = Field(default="잠수정 전시", min_length=2, max_length=240)
+    participantCount: int = Field(default=2, ge=1, le=8)
+    profile: dict[str, Any] = Field(default_factory=dict)
+
+
+class MissionRole(CamelModel):
+    name: str
+    audience: str
+    task: str
+
+
+class FamilyMissionResponse(CamelModel):
+    missionId: str
+    exhibitCode: str
+    title: str
+    story: str
+    roles: list[MissionRole] = Field(default_factory=list)
+    jointTask: str
+    expectedSkillGains: dict[str, int] = Field(default_factory=dict)
+    badge: str
+    safetyNote: str
+    followUpRecommendation: str
+    generatedBy: str = "rules"
+
+
+class MissionVerifyRequest(CamelModel):
+    missionId: str
+    completionNote: str = Field(default="", max_length=2000)
+    participantCount: int = Field(default=1, ge=1, le=8)
+
+
+class MissionVerifyResponse(CamelModel):
+    verified: bool
+    message: str
+    badge: str
+    acquiredCompetencies: dict[str, int] = Field(default_factory=dict)
+    verifiedAt: datetime
+    nextRecommendation: str
+
+
+class RouteOutcomeEventRequest(CamelModel):
+    routeId: str | None = None
+    nodeId: str | None = None
+    eventType: str = Field(pattern="^(viewed|started|completed|skipped|rerouted|followup|career_opened)$")
+    value: float = 1.0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProgramDraftRequest(CamelModel):
+    topic: str = Field(min_length=2, max_length=120)
+    targetAudience: str = Field(default="전 연령", max_length=160)
+    durationMinutes: int = Field(default=60, ge=15, le=240)
+    institutionContext: str = Field(default="국립해양박물관 현장 교육", max_length=1000)
+    objective: str = Field(default="관심을 지속 학습과 해양 진로 탐색으로 연결", max_length=500)
+
+
+class ProgramDraftResponse(CamelModel):
+    title: str
+    rationale: str
+    targetAudience: str
+    learningObjectives: list[str] = Field(default_factory=list)
+    agenda30: list[str] = Field(default_factory=list)
+    agenda60: list[str] = Field(default_factory=list)
+    agenda90: list[str] = Field(default_factory=list)
+    ncsCompetencies: list[str] = Field(default_factory=list)
+    preQuestions: list[str] = Field(default_factory=list)
+    postQuestions: list[str] = Field(default_factory=list)
+    followUpLearning: list[str] = Field(default_factory=list)
+    measurementPlan: list[str] = Field(default_factory=list)
+    generatedBy: str = "rules"
