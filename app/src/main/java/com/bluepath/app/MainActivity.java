@@ -1044,9 +1044,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(sectionTitle("BLUEPATH VOYAGE TWIN · 나의 해양인재 항로"));
         LinearLayout voyage = card();
         voyage.addView(label("AI SMART NAUTICAL CHART"));
-        voyage.addView(big("영상에서 목표 직무까지 하나의 항로로 연결"));
-        voyage.addView(body("교육·과정·관람객·NCS 데이터를 함께 분석하고, LLM은 계산된 경로의 이유와 다음 행동을 근거 중심으로 설명합니다."));
-
+        voyage.addView(big("목표 직무와 현재 실력, 활동 기록에 맞춰 AI가 학습·체험·퀴즈 순서를 만들고 새롭게 갱신해볼 수 있습니다."));
         Spinner career = spinner(new String[]{
                 "해양환경 교육 기획자", "해양생태 해설사", "항해사", "항만 물류 운영자",
                 "자율운항선박 엔지니어", "해양문화 콘텐츠 기획자"
@@ -1344,8 +1342,7 @@ public class MainActivity extends AppCompatActivity {
         content.addView(sectionTitle("박물관 현장 연동 · 가족 협동 미션"));
         LinearLayout mission = card();
         mission.addView(label("QR EXHIBIT MISSION"));
-        mission.addView(big("전시 앞에서 가족 역할을 나누고 Skill Passport 증거 획득"));
-        mission.addView(body("현장 QR의 전시 코드·세션·만료시각·일회용 nonce·서명을 서버가 검증한 뒤 역할별 미션을 생성합니다. 최초 인증 때만 역량과 배지가 지급됩니다."));
+        mission.addView(big("현장의 QR을 스캔해 미션 참여를 인증하고, 완료한 활동과 얻은 역량을 안전하게 기록해볼 수 있습니다."));        mission.addView(body("현장 QR의 전시 코드·세션·만료시각·일회용 nonce·서명을 서버가 검증한 뒤 역할별 미션을 생성합니다. 최초 인증 때만 역량과 배지가 지급됩니다."));
         if (missionLoading) {
             mission.addView(new ProgressBar(this), new LinearLayout.LayoutParams(-1, dp(42)));
             mission.addView(body("전시 맥락과 가족 구성에 맞는 역할을 설계하고 있습니다."));
