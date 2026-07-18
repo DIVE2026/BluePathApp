@@ -58,6 +58,82 @@ def test_registration_sync_quiz_and_diamond_pathway() -> None:
         assert isinstance(search.json()['items'], list)
         assert search.json()['summary']
 
+        route = client.post('/api/v1/routes/plan', headers=auth_header(token), json={
+            'targetCareer': '해양환경 교육 기획자',
+            'routeType': 'family',
+            'profile': {
+                'ageGroup': '초등학생',
+                'interest': '해양생물',
+                'level': '입문',
+                'tier': '브론즈',
+                'skillMastery': {'해양생물': 58, '해양환경': 51},
+                'completedContentIds': [],
+            },
+            'constraints': {'family': True},
+            'maxNodes': 5,
+        })
+        assert route.status_code == 200, route.text
+        route_data = route.json()
+        assert route_data['targetCareer'] == '해양환경 교육 기획자'
+        assert 3 <= len(route_data['nodes']) <= 5
+        assert route_data['readinessAfter'] > route_data['readinessBefore']
+        assert all(item['whyThisOrder'] for item in route_data['nodes'])
+        assert all(item['evidenceBasis'] for item in route_data['nodes'])
+
+        first_node = route_data['nodes'][0]
+        simulation = client.post('/api/v1/routes/simulate', headers=auth_header(token), json={
+            'routeId': route_data['routeId'],
+            'nodeId': first_node['id'],
+            'activityTitle': first_node['title'],
+            'skillTopic': first_node['topic'],
+            'expectedSkillGain': first_node['expectedSkillGain'],
+            'readinessGain': first_node['readinessGain'],
+            'profile': {'skillMastery': {first_node['topic']: 50}},
+        })
+        assert simulation.status_code == 200, simulation.text
+        assert simulation.json()['masteryAfter'] > simulation.json()['masteryBefore']
+        assert simulation.json()['nextRecommendation']
+
+        started = client.post('/api/v1/routes/outcomes', headers=auth_header(token), json={
+            'routeId': route_data['routeId'],
+            'nodeId': first_node['id'],
+            'eventType': 'started',
+            'value': 1,
+            'metadata': {'client': 'test'},
+        })
+        assert started.status_code == 200, started.text
+
+        rerouted = client.post('/api/v1/routes/reroute', headers=auth_header(token), json={
+            'routeId': route_data['routeId'],
+            'blockedNodeId': first_node['id'],
+            'reason': 'time_shortage',
+            'profile': {'interest': '해양생물'},
+            'constraints': {'maxMinutes': 30},
+        })
+        assert rerouted.status_code == 200, rerouted.text
+        assert rerouted.json()['routeId'] != route_data['routeId']
+        assert rerouted.json()['routeType'] == 'fastest'
+        assert rerouted.json()['nodes'][0]['targetId'] != first_node['targetId']
+
+        mission = client.post('/api/v1/missions/generate', headers=auth_header(token), json={
+            'exhibitCode': 'submersible',
+            'exhibitTitle': '잠수정 전시',
+            'participantCount': 3,
+            'profile': {'ageGroup': '초등학생', 'interest': '해양생물', 'level': '입문'},
+        })
+        assert mission.status_code == 200, mission.text
+        mission_data = mission.json()
+        assert len(mission_data['roles']) >= 2
+        assert mission_data['expectedSkillGains']
+        verified = client.post('/api/v1/missions/verify', headers=auth_header(token), json={
+            'missionId': mission_data['missionId'],
+            'completionNote': '가족이 안전 장치와 압력 단서를 찾아 잠수정을 설계했다.',
+            'participantCount': 3,
+        })
+        assert verified.status_code == 200, verified.text
+        assert verified.json()['verified'] is True
+        assert verified.json()['badge'] == mission_data['badge']
+
         sync = client.post('/api/v1/sync', headers=auth_header(token), json={
             'snapshot': {
                 'tier': '플래티넘',
@@ -109,6 +185,25 @@ def test_admin_content_and_quiz_management() -> None:
         assert radar.status_code == 200, radar.text
         assert radar.json()['survey']['sampleSize'] == 43
         assert isinstance(radar.json()['recommendations'], list)
+
+        outcomes = client.get('/api/v1/admin/analytics/outcomes', headers=headers)
+        assert outcomes.status_code == 200, outcomes.text
+        assert 'programOutcomes' in outcomes.json()
+        assert 'aiSuggestions' in outcomes.json()
+
+        draft = client.post('/api/v1/admin/program-draft', headers=headers, json={
+            'topic': '해양안전',
+            'targetAudience': '초등학생과 보호자',
+            'durationMinutes': 60,
+            'institutionContext': '국립해양박물관 잠수정 전시 연계',
+            'objective': '가족 체험을 지속 학습과 진로 탐색으로 연결',
+        })
+        assert draft.status_code == 200, draft.text
+        draft_data = draft.json()
+        assert draft_data['title']
+        assert draft_data['agenda30'] and draft_data['agenda60'] and draft_data['agenda90']
+        assert draft_data['ncsCompetencies']
+        assert draft_data['measurementPlan']
 
         content_payload = {
             'id': 'program-test-1',
