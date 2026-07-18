@@ -125,6 +125,15 @@ public class MainActivity extends AppCompatActivity {
     private boolean agentLoading = false;
     private String agentLastAnswer = "질문을 입력하면 BluePath AI가 상세한 답변을 제공합니다. 온라인 정보를 활용한 답변에는 참고한 근거 자료도 함께 표시됩니다.";
 
+    private boolean routeLoading = false;
+    private boolean routeAttempted = false;
+    private boolean routeRerouting = false;
+    private String routeError = "";
+    private ApiModels.RoutePlanResponse currentRoute;
+    private boolean missionLoading = false;
+    private String missionError = "";
+    private ApiModels.FamilyMissionResponse currentMission;
+
     /**
      * 커뮤니티 화면 전용 당겨서 새로고침 스크롤뷰입니다.
      * 별도의 SwipeRefreshLayout 의존성 없이 화면 최상단에서 아래로 충분히 당긴 뒤
@@ -225,6 +234,7 @@ public class MainActivity extends AppCompatActivity {
             toast(state.message);
             if (!state.success) return;
             if ("login".equals(state.type) || "register".equals(state.type)) {
+                clearVoyageSession();
                 if (store.hasProfile()) {
                     showApp(0);
                     if (viewModel.isCloudConfigured()) viewModel.refreshCatalog();
@@ -234,6 +244,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             if ("password_reset".equals(state.type) || "logout".equals(state.type)) {
+                clearVoyageSession();
                 showLoginScreen();
                 return;
             }
@@ -935,6 +946,8 @@ public class MainActivity extends AppCompatActivity {
         hero.addView(body("현재 티어 진행도 " + progress + "%" + ("다이아".equals(tier) ? " · 최고 티어" : " · 다음 기준 XP " + next)));
         content.addView(hero);
 
+
+
         content.addView(sectionTitle("나의 활동"));
         LinearLayout heatCard = card();
         int currentActivityYear = Calendar.getInstance(Locale.KOREA).get(Calendar.YEAR);
@@ -1000,6 +1013,9 @@ public class MainActivity extends AppCompatActivity {
         stats.addView(statCard(String.valueOf(store.getBookmarks().size()), "찜"), new LinearLayout.LayoutParams(0, -2, 1));
         content.addView(stats);
 
+        addVoyageTwinSection(p);
+        addFamilyMissionSection(p);
+
         content.addView(sectionTitle("AI 추천 학습 자료"));
         List<ContentItem> items = RecommendationEngine.recommendedContents(p, tier, store);
         for (int i = 0; i < Math.min(3, items.size()); i++) addContentCard(items.get(i), true);
@@ -1017,6 +1033,479 @@ public class MainActivity extends AppCompatActivity {
             for (int i = 0; i < Math.min(4, insights.size()); i++) insightCard.addView(body("• " + insights.get(i)));
             content.addView(insightCard);
         }
+    }
+
+    private void addVoyageTwinSection(UserProfile profile) {
+        content.addView(sectionTitle("BLUEPATH VOYAGE TWIN · 나의 해양인재 항로"));
+        LinearLayout voyage = card();
+        voyage.addView(label("AI SMART NAUTICAL CHART"));
+        voyage.addView(big("영상에서 목표 직무까지 하나의 항로로 연결"));
+        voyage.addView(body("교육·과정·관람객·NCS 데이터를 함께 분석하고, LLM은 계산된 경로의 이유와 다음 행동을 근거 중심으로 설명합니다."));
+
+        Spinner career = spinner(new String[]{
+                "해양환경 교육 기획자", "해양생태 해설사", "항해사", "항만 물류 운영자",
+                "자율운항선박 엔지니어", "해양문화 콘텐츠 기획자"
+        });
+        Spinner routeType = spinner(new String[]{
+                "균형 항로", "가장 빠른 항로", "체험 중심 항로", "가족과 함께하는 항로",
+                "취업 준비 항로", "주말 전용 항로", "무료 프로그램 우선 항로"
+        });
+        setSpinnerSelection(career, store.getTargetCareer());
+        setSpinnerSelection(routeType, routeTypeLabel(store.getRouteType()));
+        voyage.addView(label("목표 항구"));
+        voyage.addView(career);
+        voyage.addView(label("항해 방식"));
+        voyage.addView(routeType);
+        Button generate = primaryButton(routeLoading ? "AI가 항로를 계산하는 중…" : "AI 항로 생성·갱신");
+        generate.setEnabled(!routeLoading && !routeRerouting);
+        generate.setOnClickListener(v -> requestRoute(
+                career.getSelectedItem().toString(), routeTypeCode(routeType.getSelectedItem().toString())));
+        voyage.addView(generate, new LinearLayout.LayoutParams(-1, dp(48)));
+
+        if (routeLoading || routeRerouting) {
+            ProgressBar progress = new ProgressBar(this);
+            voyage.addView(progress, new LinearLayout.LayoutParams(-1, dp(42)));
+            voyage.addView(body(routeRerouting
+                    ? "마감·시간·난이도 제약을 반영해 대체 항로를 탐색하고 있습니다."
+                    : "현재 숙련도와 이력, 교육 일정, NCS 역량을 매핑하고 있습니다."));
+        }
+        if (!routeError.isEmpty()) voyage.addView(note("항로 불러오기: " + routeError, DANGER));
+
+        if (currentRoute != null) {
+            voyage.addView(big(currentRoute.targetCareer + " 항로"));
+            voyage.addView(body(safe(currentRoute.summary)));
+            LinearLayout readiness = row();
+            readiness.addView(statCard(currentRoute.readinessBefore + "%", "현재 준비도"), new LinearLayout.LayoutParams(0, -2, 1));
+            readiness.addView(statCard(currentRoute.readinessAfter + "%", "완료 예상"), new LinearLayout.LayoutParams(0, -2, 1));
+            readiness.addView(statCard(currentRoute.estimatedMinutes + "분", "예상 소요"), new LinearLayout.LayoutParams(0, -2, 1));
+            voyage.addView(readiness);
+            voyage.addView(note("AI 코치 · " + safe(currentRoute.coachMessage), OCEAN));
+            voyage.addView(label("현재 위치 · " + currentRoute.currentSkillTopic + " 숙련도 "
+                    + currentRoute.currentMastery + " · " + plainTierText(currentRoute.tier)));
+
+            if (currentRoute.nodes != null) {
+                for (int i = 0; i < currentRoute.nodes.size(); i++) {
+                    if (i > 0) {
+                        TextView connector = body("↓  다음 항로");
+                        connector.setGravity(Gravity.CENTER);
+                        connector.setTextColor(OCEAN);
+                        voyage.addView(connector);
+                    }
+                    addVoyageNode(voyage, currentRoute.nodes.get(i));
+                }
+            }
+
+            if (store.daysSinceRouteActivity() >= 3) {
+                voyage.addView(note("자동 재항해 신호 · 최근 " + store.daysSinceRouteActivity()
+                        + "일 동안 항로 활동이 없습니다. 40분 과정 대신 짧은 영상과 미니 퀴즈로 바꿀 수 있습니다.", DANGER));
+            }
+            Button reroute = outlineButton(routeRerouting ? "재항해 중…" : "마감·시간 부족으로 자동 재항해");
+            reroute.setEnabled(!routeLoading && !routeRerouting);
+            reroute.setOnClickListener(v -> showRerouteDialog());
+            voyage.addView(reroute);
+
+            if (currentRoute.sources != null && !currentRoute.sources.isEmpty()) {
+                voyage.addView(label("항로 설명에 사용한 근거"));
+                for (int i = 0; i < Math.min(3, currentRoute.sources.size()); i++) {
+                    ApiModels.SourceDto source = currentRoute.sources.get(i);
+                    voyage.addView(body("• " + safe(source.title) + (safe(source.organization).isEmpty()
+                            ? "" : " · " + source.organization)));
+                }
+            }
+        } else if (!routeLoading) {
+            voyage.addView(body("항로를 생성하면 온라인 학습 → 박물관 체험 → 퀴즈 → 프로젝트 → NCS 직무가 순서대로 표시됩니다."));
+        }
+        content.addView(voyage);
+
+        if (currentRoute == null && !routeLoading && !routeAttempted && viewModel.isCloudConfigured()) {
+            routeAttempted = true;
+            content.post(() -> requestRoute(store.getTargetCareer(), store.getRouteType()));
+        }
+    }
+
+    private void addVoyageNode(LinearLayout parent, ApiModels.RouteNodeDto node) {
+        LinearLayout nodeCard = card();
+        nodeCard.addView(label("STEP " + node.order + " · " + routeNodeTypeLabel(node.nodeType)
+                + " · " + safeOr(node.availabilityLabel, "일정 확인")));
+        nodeCard.addView(big(safe(node.title)));
+        nodeCard.addView(body(safe(node.description)));
+        nodeCard.addView(note(node.topic + " +" + node.expectedSkillGain + " · 직무 준비도 +"
+                + node.readinessGain + " · " + node.minutes + "분", SUCCESS));
+        if (node.ncsCompetencies != null && !node.ncsCompetencies.isEmpty()) {
+            nodeCard.addView(body("NCS 연결 · " + joinList(node.ncsCompetencies, " · ")));
+        }
+        nodeCard.addView(body("왜 이 순서인가 · " + safe(node.whyThisOrder)));
+        addReasonList(nodeCard, node.recommendationReasons);
+        if (node.evidenceBasis != null && !node.evidenceBasis.isEmpty()) {
+            nodeCard.addView(label("데이터 근거"));
+            for (int i = 0; i < Math.min(3, node.evidenceBasis.size()); i++) {
+                nodeCard.addView(body("• " + node.evidenceBasis.get(i)));
+            }
+        }
+        LinearLayout actions = row();
+        Button action = primaryButton(safeOr(node.actionLabel, "시작하기"));
+        action.setOnClickListener(v -> handleRouteNodeAction(node));
+        actions.addView(action, new LinearLayout.LayoutParams(0, dp(46), 1));
+        Button simulate = outlineButton("미래 효과");
+        simulate.setOnClickListener(v -> requestRouteSimulation(node));
+        LinearLayout.LayoutParams simParams = new LinearLayout.LayoutParams(0, dp(46), 1);
+        simParams.setMargins(dp(8), 0, 0, 0);
+        actions.addView(simulate, simParams);
+        nodeCard.addView(actions);
+        parent.addView(nodeCard);
+    }
+
+    private void requestRoute(String targetCareer, String routeType) {
+        if (!viewModel.isCloudConfigured()) {
+            routeError = "서버 연결 설정이 필요합니다.";
+            if (currentTab == 0) renderTab(0);
+            return;
+        }
+        routeLoading = true;
+        routeRerouting = false;
+        routeError = "";
+        routeAttempted = true;
+        store.saveVoyagePreferences(targetCareer, routeType);
+        if (currentTab == 0) renderTab(0);
+        executor.execute(() -> {
+            try {
+                ApiModels.RoutePlanResponse response = cloudRepository.planRoute(targetCareer, routeType);
+                runOnUiThread(() -> {
+                    currentRoute = response;
+                    routeLoading = false;
+                    routeError = "";
+                    store.touchRouteActivity();
+                    if (currentTab == 0) renderTab(0);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    routeLoading = false;
+                    routeError = safeMessage(e);
+                    if (currentTab == 0) renderTab(0);
+                });
+            }
+        });
+    }
+
+    private void requestRouteSimulation(ApiModels.RouteNodeDto node) {
+        if (currentRoute == null) return;
+        toast("미래 항로를 시뮬레이션합니다…");
+        executor.execute(() -> {
+            try {
+                ApiModels.RouteSimulationResponse result = cloudRepository.simulateRoute(currentRoute.routeId, node);
+                runOnUiThread(() -> showRouteSimulationDialog(result));
+            } catch (Exception e) {
+                runOnUiThread(() -> toast("시뮬레이션 실패: " + safeMessage(e)));
+            }
+        });
+    }
+
+    private void showRouteSimulationDialog(ApiModels.RouteSimulationResponse result) {
+        StringBuilder message = new StringBuilder();
+        message.append("현재\n")
+                .append(result.skillTopic).append(" 숙련도 ").append(result.masteryBefore).append("점\n")
+                .append("목표 직무 준비도 ").append(result.readinessBefore).append("%\n")
+                .append("취약 항목 ").append(result.weakItemsBefore).append("개\n\n")
+                .append("완료 예상 결과\n")
+                .append(result.skillTopic).append(" ").append(result.masteryBefore).append(" → ")
+                .append(result.masteryAfter).append("점\n")
+                .append("준비도 ").append(result.readinessBefore).append(" → ")
+                .append(result.readinessAfter).append("%\n")
+                .append("취약 항목 ").append(result.weakItemsBefore).append(" → ")
+                .append(result.weakItemsAfter).append("개\n\n")
+                .append(safe(result.explanation)).append("\n\n")
+                .append("다음 추천 · ").append(safe(result.nextRecommendation))
+                .append("\n예측 신뢰도 · ").append(result.confidence).append("%");
+        new AlertDialog.Builder(this)
+                .setTitle("미래 항로 시뮬레이터 · " + safe(result.activityTitle))
+                .setMessage(message.toString())
+                .setNegativeButton("닫기", null)
+                .setPositiveButton("이 활동 시작", (dialog, which) -> {
+                    if (currentRoute == null || currentRoute.nodes == null) return;
+                    for (ApiModels.RouteNodeDto node : currentRoute.nodes) {
+                        if (safe(node.title).equals(safe(result.activityTitle))) {
+                            handleRouteNodeAction(node);
+                            break;
+                        }
+                    }
+                }).show();
+    }
+
+    private void showRerouteDialog() {
+        if (currentRoute == null) return;
+        String[] labels = {"신청 마감", "시간 부족", "난이도가 높음", "주말에만 가능", "무료 활동 우선"};
+        String[] reasons = {"closed", "time_shortage", "too_difficult", "weekend_only", "free_only"};
+        new AlertDialog.Builder(this)
+                .setTitle("왜 재항해가 필요한가요?")
+                .setItems(labels, (dialog, which) -> {
+                    String blockedNode = null;
+                    if (currentRoute.nodes != null) {
+                        for (ApiModels.RouteNodeDto node : currentRoute.nodes) {
+                            if ("closed".equals(node.scheduleStatus)) {
+                                blockedNode = node.id;
+                                break;
+                            }
+                        }
+                    }
+                    requestReroute(blockedNode, reasons[which]);
+                })
+                .setNegativeButton("취소", null)
+                .show();
+    }
+
+    private void requestReroute(String blockedNodeId, String reason) {
+        if (currentRoute == null) return;
+        routeRerouting = true;
+        routeError = "";
+        if (currentTab == 0) renderTab(0);
+        executor.execute(() -> {
+            try {
+                ApiModels.RoutePlanResponse response = cloudRepository.reroute(currentRoute.routeId, blockedNodeId, reason);
+                runOnUiThread(() -> {
+                    currentRoute = response;
+                    routeRerouting = false;
+                    store.touchRouteActivity();
+                    toast("제약을 반영해 새로운 항로를 만들었습니다.");
+                    if (currentTab == 0) renderTab(0);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    routeRerouting = false;
+                    routeError = safeMessage(e);
+                    if (currentTab == 0) renderTab(0);
+                });
+            }
+        });
+    }
+
+    private void handleRouteNodeAction(ApiModels.RouteNodeDto node) {
+        store.touchRouteActivity();
+        viewModel.recordLearning("route_" + node.nodeType, node.targetId, node.title, "started");
+        executor.execute(() -> {
+            try {
+                if (currentRoute != null) cloudRepository.recordRouteOutcome(currentRoute.routeId, node.id, "started");
+            } catch (Exception ignored) {
+            }
+        });
+        if ("video".equals(node.nodeType)) {
+            store.markContentStarted(node.targetId);
+            if (!safe(node.actionUrl).isEmpty()) openUrl(node.actionUrl); else showApp(1);
+        } else if ("event".equals(node.nodeType)) {
+            requestFamilyMission("museum-route", node.title, 2);
+        } else if ("program".equals(node.nodeType) || "schedule".equals(node.nodeType)) {
+            showApp(3);
+        } else if ("quiz".equals(node.nodeType)) {
+            showApp(2);
+        } else {
+            showApp(4);
+        }
+    }
+
+    private void addFamilyMissionSection(UserProfile profile) {
+        content.addView(sectionTitle("박물관 현장 연동 · 가족 협동 미션"));
+        LinearLayout mission = card();
+        mission.addView(label("QR EXHIBIT MISSION"));
+        mission.addView(big("전시 앞에서 가족 역할을 나누고 Skill Passport 증거 획득"));
+        mission.addView(body("연령·관심·숙련도와 참여 인원에 맞춰 LLM이 15분 이내의 안전한 역할별 미션을 생성합니다. 인증 후 관련 영상과 다음 교육이 자동 연결됩니다."));
+        if (missionLoading) {
+            mission.addView(new ProgressBar(this), new LinearLayout.LayoutParams(-1, dp(42)));
+            mission.addView(body("전시 맥락과 가족 구성에 맞는 역할을 설계하고 있습니다."));
+        }
+        if (!missionError.isEmpty()) mission.addView(note("미션 불러오기: " + missionError, DANGER));
+
+        if (currentMission == null) {
+            Button generate = primaryButton(missionLoading ? "미션 생성 중…" : "잠수정 전시 QR 미션 생성");
+            generate.setEnabled(!missionLoading);
+            generate.setOnClickListener(v -> requestFamilyMission("submersible", "잠수정 전시", 2));
+            mission.addView(generate, new LinearLayout.LayoutParams(-1, dp(48)));
+            mission.addView(body("예시 · 어린이 탐험가, 보호자 항해사, 공동 잠수정 설계, 선박·해양안전 역량 증거"));
+        } else {
+            mission.addView(big(currentMission.title));
+            mission.addView(body(currentMission.story));
+            if (currentMission.roles != null) {
+                for (ApiModels.MissionRole role : currentMission.roles) {
+                    mission.addView(note(role.name + " · " + role.audience, OCEAN));
+                    mission.addView(body(role.task));
+                }
+            }
+            mission.addView(label("공동 미션"));
+            mission.addView(body(currentMission.jointTask));
+            if (currentMission.expectedSkillGains != null && !currentMission.expectedSkillGains.isEmpty()) {
+                List<String> gains = new ArrayList<>();
+                for (Map.Entry<String, Integer> entry : currentMission.expectedSkillGains.entrySet()) {
+                    gains.add(entry.getKey() + " +" + entry.getValue());
+                }
+                mission.addView(note("완료 예상 · " + joinList(gains, " · ") + " · " + currentMission.badge, SUCCESS));
+            }
+            mission.addView(body("안전 안내 · " + currentMission.safetyNote));
+            Button verify = primaryButton("QR 미션 완료 인증");
+            verify.setOnClickListener(v -> showMissionVerificationDialog());
+            mission.addView(verify, new LinearLayout.LayoutParams(-1, dp(48)));
+            Button regenerate = outlineButton("다른 역할로 미션 다시 만들기");
+            regenerate.setOnClickListener(v -> requestFamilyMission(currentMission.exhibitCode, "잠수정 전시", 3));
+            mission.addView(regenerate);
+        }
+        if (!store.getMissionBadges().isEmpty()) {
+            mission.addView(label("획득한 현장 배지"));
+            mission.addView(body(joinList(new ArrayList<>(store.getMissionBadges()), " · ")));
+        }
+        content.addView(mission);
+    }
+
+    private void requestFamilyMission(String exhibitCode, String exhibitTitle, int participants) {
+        if (!viewModel.isCloudConfigured()) {
+            missionError = "서버 연결 설정이 필요합니다.";
+            if (currentTab == 0) renderTab(0);
+            return;
+        }
+        missionLoading = true;
+        missionError = "";
+        if (currentTab == 0) renderTab(0);
+        executor.execute(() -> {
+            try {
+                ApiModels.FamilyMissionResponse response = cloudRepository.generateMission(exhibitCode, exhibitTitle, participants);
+                runOnUiThread(() -> {
+                    currentMission = response;
+                    missionLoading = false;
+                    if (currentTab != 0) showApp(0); else renderTab(0);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    missionLoading = false;
+                    missionError = safeMessage(e);
+                    if (currentTab == 0) renderTab(0);
+                });
+            }
+        });
+    }
+
+    private void showMissionVerificationDialog() {
+        if (currentMission == null) return;
+        EditText note = inputField("가족이 발견한 단서나 완성한 결과물을 짧게 기록해 주세요.", "");
+        note.setMinLines(3);
+        new AlertDialog.Builder(this)
+                .setTitle("현장 미션 완료 인증")
+                .setMessage("현장 QR을 스캔한 뒤 가족 활동 결과를 기록하면 Ocean Skill Passport에 검증 증거가 추가됩니다.")
+                .setView(note)
+                .setNegativeButton("취소", null)
+                .setPositiveButton("인증하기", (dialog, which) -> verifyCurrentMission(note.getText().toString(), 2))
+                .show();
+    }
+
+    private void verifyCurrentMission(String completionNote, int participants) {
+        if (currentMission == null) return;
+        missionLoading = true;
+        if (currentTab == 0) renderTab(0);
+        executor.execute(() -> {
+            try {
+                ApiModels.MissionVerifyResponse response = cloudRepository.verifyMission(
+                        currentMission.missionId, completionNote, participants);
+                runOnUiThread(() -> {
+                    missionLoading = false;
+                    if (response.acquiredCompetencies != null) {
+                        for (Map.Entry<String, Integer> entry : response.acquiredCompetencies.entrySet()) {
+                            store.applySkillGain(entry.getKey(), entry.getValue());
+                        }
+                    }
+                    store.addMissionBadge(response.badge);
+                    store.touchRouteActivity();
+                    viewModel.recordLearning("museum_mission", currentMission.missionId, currentMission.title, "completed_verified");
+                    recordCurrentMissionRouteCompletion();
+                    new AlertDialog.Builder(this)
+                            .setTitle("Skill Passport 인증 완료 · " + response.badge)
+                            .setMessage(response.message + "\n\n획득 역량 · "
+                                    + competencyText(response.acquiredCompetencies)
+                                    + "\n\n다음 추천 · " + response.nextRecommendation)
+                            .setPositiveButton("확인", (dialog, which) -> renderTab(0))
+                            .show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    missionLoading = false;
+                    missionError = safeMessage(e);
+                    if (currentTab == 0) renderTab(0);
+                });
+            }
+        });
+    }
+
+    private void recordRouteCompletionByTarget(String targetId) {
+        if (currentRoute == null || currentRoute.nodes == null || targetId == null) return;
+        for (ApiModels.RouteNodeDto node : currentRoute.nodes) {
+            if (!targetId.equals(node.targetId)) continue;
+            node.completed = true;
+            executor.execute(() -> {
+                try {
+                    cloudRepository.recordRouteOutcome(currentRoute.routeId, node.id, "completed");
+                } catch (Exception ignored) {
+                }
+            });
+            return;
+        }
+    }
+
+    private void recordCurrentMissionRouteCompletion() {
+        if (currentRoute == null || currentRoute.nodes == null || currentMission == null) return;
+        for (ApiModels.RouteNodeDto node : currentRoute.nodes) {
+            if (!"event".equals(node.nodeType)) continue;
+            if (!safe(currentMission.title).contains(safe(node.title))) continue;
+            node.completed = true;
+            executor.execute(() -> {
+                try {
+                    cloudRepository.recordRouteOutcome(currentRoute.routeId, node.id, "completed");
+                } catch (Exception ignored) {
+                }
+            });
+            return;
+        }
+    }
+
+    private void clearVoyageSession() {
+        currentRoute = null;
+        currentMission = null;
+        routeLoading = false;
+        routeRerouting = false;
+        routeAttempted = false;
+        routeError = "";
+        missionLoading = false;
+        missionError = "";
+    }
+
+    private String competencyText(Map<String, Integer> values) {
+        if (values == null || values.isEmpty()) return "현장 협업 증거";
+        List<String> result = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : values.entrySet()) result.add(entry.getKey() + " +" + entry.getValue());
+        return joinList(result, " · ");
+    }
+
+    private String routeTypeLabel(String code) {
+        if ("fastest".equals(code)) return "가장 빠른 항로";
+        if ("experience".equals(code)) return "체험 중심 항로";
+        if ("family".equals(code)) return "가족과 함께하는 항로";
+        if ("career".equals(code)) return "취업 준비 항로";
+        if ("weekend".equals(code)) return "주말 전용 항로";
+        if ("free".equals(code)) return "무료 프로그램 우선 항로";
+        return "균형 항로";
+    }
+
+    private String routeTypeCode(String label) {
+        if (label.contains("가장 빠른")) return "fastest";
+        if (label.contains("체험 중심")) return "experience";
+        if (label.contains("가족")) return "family";
+        if (label.contains("취업")) return "career";
+        if (label.contains("주말")) return "weekend";
+        if (label.contains("무료")) return "free";
+        return "balanced";
+    }
+
+    private String routeNodeTypeLabel(String type) {
+        if ("video".equals(type)) return "온라인 학습";
+        if ("program".equals(type) || "schedule".equals(type)) return "교육 과정";
+        if ("event".equals(type)) return "박물관 현장 미션";
+        if ("quiz".equals(type)) return "맞춤 진단";
+        if ("project".equals(type)) return "직무 프로젝트";
+        if ("career".equals(type)) return "목표 항구";
+        return "항로 활동";
     }
 
     private void renderLearning() {
@@ -2054,6 +2543,7 @@ public class MainActivity extends AppCompatActivity {
             int xp = item.difficulty.equals("하") ? 80 : item.difficulty.equals("중") ? 120 : 180;
             store.addXp(xp);
             viewModel.recordLearning("video", item.id, item.title, "completed_with_reflection");
+            recordRouteCompletionByTarget(item.id);
             dialog.dismiss();
             toast("학습 완료가 인증되었습니다. XP +" + xp);
             showApp(currentTab);
