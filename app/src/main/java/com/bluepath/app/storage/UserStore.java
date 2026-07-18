@@ -499,6 +499,60 @@ public class UserStore {
                 && "approved".equals(getProjectStatus());
     }
 
+    public String getTargetCareer() {
+        String fallback;
+        String interest = getProfile().interest;
+        if (interest.contains("항해")) fallback = "항해사";
+        else if (interest.contains("항만")) fallback = "항만 물류 운영자";
+        else if (interest.contains("선박")) fallback = "자율운항선박 엔지니어";
+        else if (interest.contains("문화") || interest.contains("독도")) fallback = "해양문화 콘텐츠 기획자";
+        else if (interest.contains("생물")) fallback = "해양생태 해설사";
+        else fallback = "해양환경 교육 기획자";
+        return prefs.getString("targetCareer", fallback);
+    }
+
+    public String getRouteType() {
+        return prefs.getString("routeType", "balanced");
+    }
+
+    public void saveVoyagePreferences(String targetCareer, String routeType) {
+        prefs.edit()
+                .putString("targetCareer", targetCareer == null ? "해양환경 교육 기획자" : targetCareer)
+                .putString("routeType", routeType == null ? "balanced" : routeType)
+                .apply();
+    }
+
+    public void touchRouteActivity() {
+        prefs.edit().putLong("lastRouteActivityAt", System.currentTimeMillis()).apply();
+    }
+
+    public long daysSinceRouteActivity() {
+        long value = prefs.getLong("lastRouteActivityAt", 0L);
+        if (value <= 0L) return 0L;
+        return Math.max(0L, (System.currentTimeMillis() - value) / (24L * 60L * 60L * 1000L));
+    }
+
+    public void applySkillGain(String topic, int points) {
+        String key = normalizeSkillTopic(topic);
+        int next = Math.max(0, Math.min(100, getSkillMastery(key) + Math.max(0, points)));
+        prefs.edit()
+                .putInt("skillTotal_" + key, 100)
+                .putInt("skillCorrect_" + key, next)
+                .apply();
+    }
+
+    public Set<String> getMissionBadges() {
+        return new HashSet<>(prefs.getStringSet("missionBadges", new HashSet<>()));
+    }
+
+    public void addMissionBadge(String badge) {
+        if (badge == null || badge.trim().isEmpty()) return;
+        Set<String> values = getMissionBadges();
+        values.add(badge.trim());
+        prefs.edit().putStringSet("missionBadges", values).apply();
+        recordActivity("mission", 1);
+    }
+
     public Map<String, Object> toCloudSnapshot() {
         UserProfile profile = getProfile();
         Map<String, Object> snapshot = new HashMap<>();
@@ -529,6 +583,10 @@ public class UserStore {
         snapshot.put("diamondCertificationStatus", getCertificationStatus());
         snapshot.put("diamondProjectStatus", getProjectStatus());
         snapshot.put("skillMastery", getSkillMasteryMap());
+        snapshot.put("targetCareer", getTargetCareer());
+        snapshot.put("routeType", getRouteType());
+        snapshot.put("missionBadges", new ArrayList<>(getMissionBadges()));
+        snapshot.put("lastRouteActivityAt", prefs.getLong("lastRouteActivityAt", 0L));
         return snapshot;
     }
 
@@ -557,6 +615,11 @@ public class UserStore {
         putInt(editor, snapshot, "reminderHour", "reminderHour");
         putInt(editor, snapshot, "reminderMinute", "reminderMinute");
         putBoolean(editor, snapshot, "diamondAdvancedQuizPassed", "diamondAdvancedQuizPassed");
+        putString(editor, snapshot, "targetCareer");
+        putString(editor, snapshot, "routeType");
+        putStringSet(editor, snapshot, "missionBadges", "missionBadges");
+        Object lastRouteActivityAt = snapshot.get("lastRouteActivityAt");
+        if (lastRouteActivityAt instanceof Number) editor.putLong("lastRouteActivityAt", ((Number) lastRouteActivityAt).longValue());
         String certification = stringValue(snapshot.get("diamondCertificationStatus"));
         String project = stringValue(snapshot.get("diamondProjectStatus"));
         if (!certification.isEmpty()) editor.putString("diamondCertificationStatus", certification);
