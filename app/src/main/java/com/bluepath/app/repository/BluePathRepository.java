@@ -116,6 +116,59 @@ public class BluePathRepository {
         return requireBody(api.aiSearch(bearer(), new ApiModels.AiSearchRequest(query, resourceType, 12)).execute(), "AI 자료 검색");
     }
 
+    public ApiModels.RoutePlanResponse planRoute(String targetCareer, String routeType) throws IOException {
+        requireAuthenticated();
+        java.util.Map<String, Object> constraints = new java.util.HashMap<>();
+        constraints.put("weekendOnly", "weekend".equals(routeType));
+        constraints.put("freeOnly", "free".equals(routeType));
+        constraints.put("family", "family".equals(routeType));
+        return requireBody(api.planRoute(
+                bearer(),
+                new ApiModels.RoutePlanRequest(targetCareer, routeType, store.toCloudSnapshot(), constraints, 5)
+        ).execute(), "AI 항로 생성");
+    }
+
+    public ApiModels.RouteSimulationResponse simulateRoute(String routeId, ApiModels.RouteNodeDto node) throws IOException {
+        requireAuthenticated();
+        return requireBody(api.simulateRoute(
+                bearer(), new ApiModels.RouteSimulationRequest(routeId, node, store.toCloudSnapshot())
+        ).execute(), "미래 항로 시뮬레이션");
+    }
+
+    public ApiModels.RoutePlanResponse reroute(String routeId, String blockedNodeId, String reason) throws IOException {
+        requireAuthenticated();
+        java.util.Map<String, Object> constraints = new java.util.HashMap<>();
+        constraints.put("reason", reason);
+        return requireBody(api.reroute(
+                bearer(),
+                new ApiModels.RouteRerouteRequest(routeId, blockedNodeId, reason, store.toCloudSnapshot(), constraints)
+        ).execute(), "자동 재항해");
+    }
+
+    public void recordRouteOutcome(String routeId, String nodeId, String eventType) throws IOException {
+        requireAuthenticated();
+        java.util.Map<String, Object> metadata = new java.util.HashMap<>();
+        metadata.put("client", "android");
+        requireBody(api.routeOutcome(
+                bearer(), new ApiModels.RouteOutcomeRequest(routeId, nodeId, eventType, metadata)
+        ).execute(), "항로 활동 기록");
+    }
+
+    public ApiModels.FamilyMissionResponse generateMission(String exhibitCode, String exhibitTitle, int participantCount) throws IOException {
+        requireAuthenticated();
+        return requireBody(api.generateMission(
+                bearer(),
+                new ApiModels.MissionGenerateRequest(exhibitCode, exhibitTitle, participantCount, store.toCloudSnapshot())
+        ).execute(), "가족 협동 미션 생성");
+    }
+
+    public ApiModels.MissionVerifyResponse verifyMission(String missionId, String completionNote, int participantCount) throws IOException {
+        requireAuthenticated();
+        return requireBody(api.verifyMission(
+                bearer(), new ApiModels.MissionVerifyRequest(missionId, completionNote, participantCount)
+        ).execute(), "현장 미션 인증");
+    }
+
     public ApiModels.DashboardResponse refreshDashboard() throws IOException {
         requireAuthenticated();
         ApiModels.DashboardResponse body = requireBody(api.dashboard(bearer()).execute(), "홈 활동 불러오기");
