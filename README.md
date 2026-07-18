@@ -274,3 +274,7 @@ Then build normally:
 ```
 
 BluePath turns ocean curiosity into an explainable and verifiable route from discovery, through learning and assessment, to institutional education and marine careers.
+
+## Security-ready Voyage Twin flow
+
+Route ownership isolation, signed one-time exhibit QR verification, idempotent mission rewards, pending automatic reroutes, operational participation metrics, production AI gates, and clean submission packaging are documented in [docs/BLUEPATH_1_4_SECURITY_RELEASE.md](docs/BLUEPATH_1_4_SECURITY_RELEASE.md).
