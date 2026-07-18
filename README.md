@@ -6,7 +6,7 @@ BluePath is an Android learning and career-navigation platform that converts mar
 
 <div align="center">
 
-[Product Specification](docs/APP_SPEC.md) · [Developer Setup](docs/DEVELOPER_SETUP.md) · [Marine AI Setup](docs/MARINE_LLM_SETUP.md) · [Fine-Tuning Guide](docs/FINE_TUNING_GUIDE.md)
+[Product Specification](docs/APP_SPEC.md) · [Developer Setup](docs/DEVELOPER_SETUP.md) · [Marine AI Setup](docs/MARINE_LLM_SETUP.md) · [Fine-Tuning Guide](docs/FINE_TUNING_GUIDE.md) · [Voyage Twin 1.4](docs/BLUEPATH_1_4_VOYAGE_TWIN.md)
 
 </div>
 
@@ -31,6 +31,20 @@ The authenticated experience also includes:
 - Natural-language AI search directly below the Learning Materials and Schedule introductions
 - AI Career Counseling at the top of navigation, combining app RAG with optional live Tavily or Brave retrieval
 - Learning Materials split into Video and an intentionally empty Paper tab
+
+## BluePath Voyage Twin 1.4
+
+The Home route is now a living **Smart Nautical Chart** rather than a set of disconnected cards. It links online learning, museum experience, diagnostic quiz, project evidence, and an NCS-oriented target career in one explainable route.
+
+- Seven route modes: balanced, fastest, experience, family, career, weekend, and free-first
+- Future-route simulation showing expected mastery and readiness changes before an activity is chosen
+- Automatic rerouting when a program closes, time is short, or the difficulty is too high
+- LLM-enhanced explanations that preserve deterministic scores and cite institutional evidence
+- Guardrailed family missions generated from exhibit, age, interest, level, and participant count
+- Ocean Skill Passport verification and post-visit follow-up learning
+- Institution-side outcome analytics and an AI education-program studio
+
+The deterministic engine owns ordering, expected gains, readiness calculation, and constraints. The LLM is used only to improve grounded explanations, personalize safe mission wording, and draft editable institution programs.
 
 ## What Makes BluePath Different
 
@@ -241,7 +255,7 @@ pytest -q backend/tests/test_api.py
 | [Product Specification](docs/APP_SPEC.md) | Product definition, target users, core learner flow, tier system, recommendation model, community experience, and AI Agent examples |
 | [Developer Setup](docs/DEVELOPER_SETUP.md) | Android API configuration, backend environment setup, administrator workflow, YouTube synchronization, social features, search providers, and test commands |
 | [Marine AI Setup](docs/MARINE_LLM_SETUP.md) | Overview of the server-side marine AI architecture, RAG grounding, quiz validation, optional live-web retrieval, and offline fallback behavior |
-| [Fine-Tuning Guide](docs/FINE_TUNING_GUIDE.md) | Dataset generation, LoRA training, evaluation, model serving, backend integration, and production release checklist |
+| [Fine-Tuning Guide](docs/FINE_TUNING_GUIDE.md) · [Voyage Twin 1.4](docs/BLUEPATH_1_4_VOYAGE_TWIN.md) | Dataset generation, LoRA training, evaluation, model serving, backend integration, and production release checklist |
 
 ---
 
