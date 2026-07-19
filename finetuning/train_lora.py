@@ -1,24 +1,76 @@
 #!/usr/bin/env python3
-"""Train a BluePath marine adapter with TRL SFTTrainer and PEFT LoRA/QLoRA."""
+"""Train a reproducible BluePath marine adapter with TRL SFTTrainer and PEFT LoRA/QLoRA."""
 from __future__ import annotations
 
+import hashlib
+import importlib.metadata
 import json
 import os
+import re
+import sys
 from pathlib import Path
+from typing import Any
 
 import torch
 from datasets import load_dataset
 from peft import LoraConfig
-from transformers import AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoTokenizer, BitsAndBytesConfig, EarlyStoppingCallback, set_seed
 from trl import SFTConfig, SFTTrainer
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.validate_marine_dataset import validate  # noqa: E402
+
 BASE_MODEL = os.getenv("BLUEPATH_BASE_MODEL", "Qwen/Qwen2.5-3B-Instruct")
 OUTPUT_DIR = Path(os.getenv("BLUEPATH_FINETUNE_OUTPUT", str(ROOT / "finetuning/output/marine-lora")))
-TRAIN_FILE = os.getenv("BLUEPATH_TRAIN_FILE", str(ROOT / "finetuning/data/train.jsonl"))
-VALIDATION_FILE = os.getenv("BLUEPATH_VALIDATION_FILE", str(ROOT / "finetuning/data/validation.jsonl"))
+TRAIN_FILE = Path(os.getenv("BLUEPATH_TRAIN_FILE", str(ROOT / "finetuning/data/train.jsonl")))
+VALIDATION_FILE = Path(os.getenv("BLUEPATH_VALIDATION_FILE", str(ROOT / "finetuning/data/validation.jsonl")))
 USE_4BIT = os.getenv("BLUEPATH_USE_4BIT", "true").lower() == "true"
 SEED = int(os.getenv("BLUEPATH_SEED", "20260711"))
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    return os.getenv(name, str(default)).lower() in {"1", "true", "yes", "on"}
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def package_versions() -> dict[str, str]:
+    result: dict[str, str] = {}
+    for package in ["torch", "transformers", "datasets", "peft", "trl", "accelerate", "bitsandbytes"]:
+        try:
+            result[package] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            result[package] = "not-installed"
+    return result
+
+
+def preflight_datasets() -> dict[str, Any]:
+    train_count, train_errors, train_fingerprints = validate(TRAIN_FILE)
+    validation_count, validation_errors, validation_fingerprints = validate(VALIDATION_FILE)
+    errors = [f"{TRAIN_FILE}: {value}" for value in train_errors]
+    errors.extend(f"{VALIDATION_FILE}: {value}" for value in validation_errors)
+    overlap = set(train_fingerprints).intersection(validation_fingerprints)
+    if overlap:
+        errors.append(f"training and validation contain {len(overlap)} duplicate conversations")
+    if errors:
+        formatted = "\n".join(f"- {value}" for value in errors[:50])
+        raise ValueError(f"Dataset preflight failed:\n{formatted}")
+    return {
+        "trainExamples": train_count,
+        "validationExamples": validation_count,
+        "trainSha256": sha256_file(TRAIN_FILE),
+        "validationSha256": sha256_file(VALIDATION_FILE),
+        "crossSplitDuplicates": 0,
+    }
 
 
 def build_quantization_config() -> BitsAndBytesConfig | None:
@@ -33,8 +85,36 @@ def build_quantization_config() -> BitsAndBytesConfig | None:
     )
 
 
+def latest_checkpoint(output_dir: Path) -> str | None:
+    checkpoints: list[tuple[int, Path]] = []
+    for path in output_dir.glob("checkpoint-*"):
+        match = re.fullmatch(r"checkpoint-(\d+)", path.name)
+        if match and path.is_dir():
+            checkpoints.append((int(match.group(1)), path))
+    return str(max(checkpoints)[1]) if checkpoints else None
+
+
+def resolve_resume_checkpoint() -> str | None:
+    explicit = os.getenv("BLUEPATH_RESUME_CHECKPOINT", "").strip()
+    if explicit and explicit.lower() != "auto":
+        path = Path(explicit)
+        if not path.exists():
+            raise FileNotFoundError(f"Resume checkpoint does not exist: {path}")
+        return str(path)
+    if explicit.lower() == "auto" or env_bool("BLUEPATH_AUTO_RESUME"):
+        return latest_checkpoint(OUTPUT_DIR)
+    return None
+
+
 def main() -> None:
-    dataset = load_dataset("json", data_files={"train": TRAIN_FILE, "validation": VALIDATION_FILE})
+    set_seed(SEED)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    dataset_manifest = preflight_datasets()
+    dataset = load_dataset(
+        "json",
+        data_files={"train": str(TRAIN_FILE), "validation": str(VALIDATION_FILE)},
+    )
+
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -44,6 +124,8 @@ def main() -> None:
     target_modules: str | list[str] = target_value
     if target_value != "all-linear":
         target_modules = [value.strip() for value in target_value.split(",") if value.strip()]
+        if not target_modules:
+            raise ValueError("BLUEPATH_LORA_TARGETS did not contain any target modules")
 
     peft_config = LoraConfig(
         r=int(os.getenv("BLUEPATH_LORA_R", "16")),
@@ -55,6 +137,7 @@ def main() -> None:
     )
 
     quantization_config = build_quantization_config()
+    early_stopping_patience = int(os.getenv("BLUEPATH_EARLY_STOPPING_PATIENCE", "2"))
     training_args = SFTConfig(
         output_dir=str(OUTPUT_DIR),
         num_train_epochs=float(os.getenv("BLUEPATH_EPOCHS", "3")),
@@ -62,8 +145,10 @@ def main() -> None:
         per_device_eval_batch_size=int(os.getenv("BLUEPATH_EVAL_BATCH", "1")),
         gradient_accumulation_steps=int(os.getenv("BLUEPATH_GRAD_ACCUM", "8")),
         learning_rate=float(os.getenv("BLUEPATH_LEARNING_RATE", "2e-4")),
+        lr_scheduler_type=os.getenv("BLUEPATH_LR_SCHEDULER", "cosine"),
         warmup_ratio=float(os.getenv("BLUEPATH_WARMUP_RATIO", "0.05")),
         weight_decay=float(os.getenv("BLUEPATH_WEIGHT_DECAY", "0.01")),
+        max_grad_norm=float(os.getenv("BLUEPATH_MAX_GRAD_NORM", "1.0")),
         logging_steps=int(os.getenv("BLUEPATH_LOGGING_STEPS", "5")),
         eval_strategy="epoch",
         save_strategy="epoch",
@@ -74,11 +159,12 @@ def main() -> None:
         bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
         fp16=torch.cuda.is_available() and not torch.cuda.is_bf16_supported(),
         gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         max_length=int(os.getenv("BLUEPATH_MAX_SEQ_LENGTH", "2048")),
-        packing=os.getenv("BLUEPATH_PACKING", "false").lower() == "true",
+        packing=env_bool("BLUEPATH_PACKING"),
         report_to=os.getenv("BLUEPATH_REPORT_TO", "none"),
         run_name=os.getenv("BLUEPATH_RUN_NAME", "bluepath-marine-sft"),
-        assistant_only_loss=os.getenv("BLUEPATH_ASSISTANT_ONLY_LOSS", "false").lower() == "true",
+        assistant_only_loss=env_bool("BLUEPATH_ASSISTANT_ONLY_LOSS"),
         eos_token=os.getenv("BLUEPATH_EOS_TOKEN") or ("<|im_end|>" if "qwen" in BASE_MODEL.lower() else None),
         dataset_num_proc=int(os.getenv("BLUEPATH_DATASET_NUM_PROC", "1")),
         trust_remote_code=True,
@@ -88,6 +174,15 @@ def main() -> None:
         model_init_kwargs={"dtype": "auto"},
     )
 
+    callbacks = []
+    if early_stopping_patience > 0:
+        callbacks.append(
+            EarlyStoppingCallback(
+                early_stopping_patience=early_stopping_patience,
+                early_stopping_threshold=float(os.getenv("BLUEPATH_EARLY_STOPPING_THRESHOLD", "0.0")),
+            )
+        )
+
     trainer = SFTTrainer(
         model=BASE_MODEL,
         args=training_args,
@@ -96,25 +191,63 @@ def main() -> None:
         processing_class=tokenizer,
         peft_config=peft_config,
         quantization_config=quantization_config,
+        callbacks=callbacks,
     )
-    trainer.train(resume_from_checkpoint=os.getenv("BLUEPATH_RESUME_CHECKPOINT") or None)
+
+    trainable_parameters = sum(parameter.numel() for parameter in trainer.model.parameters() if parameter.requires_grad)
+    total_parameters = sum(parameter.numel() for parameter in trainer.model.parameters())
+    resume_checkpoint = resolve_resume_checkpoint()
+    train_result = trainer.train(resume_from_checkpoint=resume_checkpoint)
     trainer.save_model(str(OUTPUT_DIR))
     tokenizer.save_pretrained(str(OUTPUT_DIR))
+
+    log_history_path = OUTPUT_DIR / "bluepath_log_history.json"
+    log_history_path.write_text(
+        json.dumps(trainer.state.log_history, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     run_manifest = {
         "baseModel": BASE_MODEL,
         "output": str(OUTPUT_DIR),
-        "trainFile": TRAIN_FILE,
-        "validationFile": VALIDATION_FILE,
+        "trainFile": str(TRAIN_FILE),
+        "validationFile": str(VALIDATION_FILE),
+        "dataset": dataset_manifest,
         "seed": SEED,
         "use4Bit": bool(quantization_config),
-        "loraTargets": target_modules,
+        "lora": {
+            "rank": peft_config.r,
+            "alpha": peft_config.lora_alpha,
+            "dropout": peft_config.lora_dropout,
+            "targets": target_modules,
+        },
+        "training": {
+            "epochs": training_args.num_train_epochs,
+            "learningRate": training_args.learning_rate,
+            "scheduler": str(training_args.lr_scheduler_type),
+            "effectiveBatchSizePerProcess": (
+                training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps
+            ),
+            "maxSequenceLength": training_args.max_length,
+            "assistantOnlyLoss": training_args.assistant_only_loss,
+            "earlyStoppingPatience": early_stopping_patience,
+            "resumeCheckpoint": resume_checkpoint,
+            "globalStep": trainer.state.global_step,
+            "trainingLoss": train_result.training_loss,
+        },
+        "parameters": {
+            "trainable": trainable_parameters,
+            "total": total_parameters,
+            "trainablePercent": (100.0 * trainable_parameters / total_parameters) if total_parameters else 0.0,
+        },
         "bestCheckpoint": trainer.state.best_model_checkpoint,
         "bestMetric": trainer.state.best_metric,
+        "packages": package_versions(),
+        "logHistory": str(log_history_path),
     }
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUTPUT_DIR / "bluepath_training_manifest.json").write_text(
-        json.dumps(run_manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(run_manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
     )
     print(json.dumps(run_manifest, ensure_ascii=False, indent=2))
 
