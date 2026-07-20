@@ -96,6 +96,7 @@ public class MainActivity extends AppCompatActivity {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private LinearLayout root;
     private LinearLayout content;
+    private ScrollView contentScroll;
     private FrameLayout appRoot;
     private LinearLayout sidebar;
     private View sidebarScrim;
@@ -736,6 +737,7 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll = tab == 5
                 ? new CommunityRefreshScrollView()
                 : new ScrollView(this);
+        contentScroll = scroll;
         scroll.setFillViewport(true);
         scroll.addView(content);
         main.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -2177,8 +2179,13 @@ public class MainActivity extends AppCompatActivity {
             if (onlinePrograms.size() > 4) {
                 Button toggle = outlineButton(scheduleOnlineExpanded ? "접기" : "더보기 (" + (onlinePrograms.size() - 4) + "개 더)");
                 toggle.setOnClickListener(v -> {
+                    int savedScrollY = contentScroll == null ? 0 : contentScroll.getScrollY();
                     scheduleOnlineExpanded = !scheduleOnlineExpanded;
                     showApp(3);
+                    ScrollView restoredScroll = contentScroll;
+                    if (restoredScroll != null) {
+                        restoredScroll.post(() -> restoredScroll.scrollTo(0, savedScrollY));
+                    }
                 });
                 content.addView(toggle, new LinearLayout.LayoutParams(-1, dp(44)));
             }
