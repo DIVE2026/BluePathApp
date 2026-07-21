@@ -133,16 +133,27 @@ public final class ApiModels {
         }
     }
 
+    public static class CloudLearningRecordDto {
+        public String id;
+        public String recordType;
+        public String targetId;
+        public String title;
+        public String status;
+        public long updatedAt;
+    }
+
     public static class SyncResponse {
         public String message;
         public String syncedAt;
         public DiamondStatus diamondStatus;
         public Map<String, Object> snapshot;
+        public List<CloudLearningRecordDto> learningRecords = new ArrayList<>();
     }
 
     public static class CloudStateResponse {
         public Map<String, Object> snapshot;
         public DiamondStatus diamondStatus;
+        public List<CloudLearningRecordDto> learningRecords = new ArrayList<>();
     }
 
     public static class EvidenceRequest {
@@ -182,6 +193,9 @@ public final class ApiModels {
         public String method;
         public String category;
         public String description;
+        public String authors;
+        public String year;
+        public String doi;
     }
 
 
@@ -217,6 +231,8 @@ public final class ApiModels {
         public ProfileSummary author;
         public String body;
         public String createdAt;
+        public String updatedAt;
+        public boolean canEdit;
         public List<ReactionSummary> reactions = new ArrayList<>();
     }
 
@@ -227,6 +243,8 @@ public final class ApiModels {
         public String title;
         public String body;
         public String createdAt;
+        public String updatedAt;
+        public boolean canEdit;
         public List<ReactionSummary> reactions = new ArrayList<>();
         public List<CommunityCommentDto> comments = new ArrayList<>();
     }
@@ -251,6 +269,31 @@ public final class ApiModels {
             this.body = body;
             this.parentId = parentId;
         }
+    }
+
+
+    public static class CommunityPostUpdateRequest {
+        public String title;
+        public String body;
+        public CommunityPostUpdateRequest(String title, String body) { this.title = title; this.body = body; }
+    }
+
+    public static class CommunityCommentUpdateRequest {
+        public String body;
+        public CommunityCommentUpdateRequest(String body) { this.body = body; }
+    }
+
+    public static class CommunityReportRequest {
+        public String targetType;
+        public String targetId;
+        public String reason;
+        public CommunityReportRequest(String targetType, String targetId, String reason) {
+            this.targetType = targetType; this.targetId = targetId; this.reason = reason;
+        }
+    }
+
+    public static class CommunityBlockResponse {
+        public boolean blocked;
     }
 
     public static class ReactionToggleRequest {
