@@ -4,7 +4,7 @@
 
 BluePath is an Android learning and career-navigation platform that turns marine videos, museum programs, training courses, quizzes, community activity, visitor-demand data, and NCS-oriented career competencies into an explainable personal learning route.
 
-Instead of showing disconnected recommendations, BluePath connects discovery, learning, field experience, assessment, project evidence, and career preparation in one Smart Nautical Chart. Learners can generate or refresh an AI-assisted route for a target career, preview the expected effect of each activity, verify field missions through signed one-time QR codes, and keep verified achievements in an Ocean Skill Passport. Institutions can review demand, participation, mastery gaps, and program outcomes through an administrator dashboard.
+Instead of showing disconnected recommendations, BluePath connects discovery, learning, field experience, assessment, project evidence, and career preparation in one Smart Nautical Chart. Learners can generate or refresh an AI-assisted route for a target career, preview the expected effect of each activity, verify field missions through signed one-time QR codes, explore evidence and career links through an interactive Ocean Skill Map, and export verified achievements as a shareable Ocean Skill Portfolio. Institutions can review demand, participation, mastery gaps, and program outcomes through an administrator dashboard.
 
 <div align="center">
 
@@ -22,7 +22,7 @@ The learner experience follows a commercial-app style entry flow:
 4. The authenticated app shell with a collapsible sidebar
 5. AI Career Counseling, Home, Learning Materials, Quiz, Schedule, Ocean Community, and MY
 6. A personalized Smart Nautical Chart linking learning, experience, assessment, and career goals
-7. Verified field missions and progress stored in the Ocean Skill Passport
+7. Verified field missions and progress stored in the Ocean Skill Passport, visualized in the Ocean Skill Map, and exportable as an evidence-based PDF portfolio
 
 The bottom navigation has been removed. Every tab begins with an introduction panel that explains its purpose and how its data is used.
 
@@ -93,7 +93,7 @@ Promotion quizzes use delayed grading and detailed explanations, while repeated 
 - Same or lower repeated score: no XP
 - Every answer becomes topic-level skill evidence
 
-The **MY** tab displays mastery and evidence counts for marine environment, marine life, navigation, ships, maritime culture, safety, and port logistics.
+The **MY** tab displays mastery and evidence counts for marine environment, marine life, navigation, ships, maritime culture, safety, and port logistics. The same evidence is visualized as an interactive constellation-style Ocean Skill Map. Selecting a node explains the score source, related sub-skills, NCS-oriented competencies, connected careers, and the next recommended activity.
 
 ### Ocean Community
 
@@ -112,19 +112,23 @@ The community uses the same learner identity and progression context shown in Ho
 
 ### Ocean Skill Passport
 
-MY is an authenticated personal ocean passport that includes:
+MY is an authenticated personal ocean passport that turns recorded activity into both an explorable skill profile and a reusable evidence portfolio. It includes:
 
 - One unified tier with a tier-colored shield and progress gauge
-- Verified learning and mission completions
+- Verified learning and signed mission completions
+- An interactive Ocean Skill Map with mastery scores, evidence counts, sub-skills, NCS-oriented competencies, connected careers, and projected next scores
+- Target-career readiness calculated from the most relevant skill nodes
+- A portfolio preview combining learner profile, verified learning reflections, quiz results, mission badges, and Diamond review status
+- PDF generation and Android share-sheet delivery through a scoped FileProvider
+- A document evidence code derived from the current portfolio snapshot so different evidence states can be distinguished
+- Clear separation between app-verified records and external institution approval; certification or project evidence is shown as approved only when its stored review status is approved
 - Saved resources and opportunities
-- Topic mastery progress bars
 - Quiz attempts and best scores
 - Nickname-based profile and profile-image upload
 - Follower and following counts
 - Cloud synchronization and catalog refresh
 - Learning and qualification reminders
 - Guardian consent management
-- Diamond evidence and review status
 - Logout and local-data reset
 
 ### Natural-Language Search and Marine AI
