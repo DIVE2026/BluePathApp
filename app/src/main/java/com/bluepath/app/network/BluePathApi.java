@@ -4,6 +4,8 @@ import retrofit2.Call;
 import okhttp3.MultipartBody;
 import retrofit2.http.Body;
 import retrofit2.http.GET;
+import retrofit2.http.DELETE;
+import retrofit2.http.PUT;
 import retrofit2.http.Header;
 import retrofit2.http.Multipart;
 import retrofit2.http.Part;
@@ -55,7 +57,10 @@ public interface BluePathApi {
     @GET("api/v1/community/posts")
     Call<java.util.List<ApiModels.CommunityPostDto>> communityPosts(
             @Header("Authorization") String authorization,
-            @Query("category") String category
+            @Query("category") String category,
+            @Query("q") String query,
+            @Query("limit") int limit,
+            @Query("offset") int offset
     );
 
     @POST("api/v1/community/posts")
@@ -69,6 +74,44 @@ public interface BluePathApi {
             @Header("Authorization") String authorization,
             @Path("postId") String postId,
             @Body ApiModels.CommunityCommentRequest request
+    );
+
+    @PUT("api/v1/community/posts/{postId}")
+    Call<ApiModels.CommunityPostDto> updateCommunityPost(
+            @Header("Authorization") String authorization,
+            @Path("postId") String postId,
+            @Body ApiModels.CommunityPostUpdateRequest request
+    );
+
+    @DELETE("api/v1/community/posts/{postId}")
+    Call<ApiModels.GenericResponse> deleteCommunityPost(
+            @Header("Authorization") String authorization,
+            @Path("postId") String postId
+    );
+
+    @PUT("api/v1/community/comments/{commentId}")
+    Call<ApiModels.CommunityCommentDto> updateCommunityComment(
+            @Header("Authorization") String authorization,
+            @Path("commentId") String commentId,
+            @Body ApiModels.CommunityCommentUpdateRequest request
+    );
+
+    @DELETE("api/v1/community/comments/{commentId}")
+    Call<ApiModels.GenericResponse> deleteCommunityComment(
+            @Header("Authorization") String authorization,
+            @Path("commentId") String commentId
+    );
+
+    @POST("api/v1/community/reports")
+    Call<ApiModels.GenericResponse> reportCommunity(
+            @Header("Authorization") String authorization,
+            @Body ApiModels.CommunityReportRequest request
+    );
+
+    @POST("api/v1/community/users/{userId}/block")
+    Call<ApiModels.CommunityBlockResponse> toggleBlock(
+            @Header("Authorization") String authorization,
+            @Path("userId") String userId
     );
 
     @POST("api/v1/community/reactions")
