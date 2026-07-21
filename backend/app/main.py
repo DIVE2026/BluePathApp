@@ -16,16 +16,18 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Uploa
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import delete, func, inspect, select, text
+from sqlalchemy import delete, func, inspect, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine, get_db
 from .models import (
+    CommunityBlock,
     CommunityComment,
     CommunityPost,
     CommunityReaction,
+    CommunityReport,
     Content,
     DiamondEvidence,
     Follow,
@@ -46,10 +48,15 @@ from .schemas import (
     AiSearchResponse,
     AuthRequest,
     AuthResponse,
+    CommunityBlockResponse,
     CommunityCommentCreate,
     CommunityCommentItem,
+    CommunityCommentUpdate,
+    CommunityModerationRequest,
     CommunityPostCreate,
     CommunityPostItem,
+    CommunityPostUpdate,
+    CommunityReportRequest,
     CloudStateResponse,
     DashboardResponse,
     PasswordResetConfirm,
@@ -603,12 +610,26 @@ async def upload_profile_image(
 @app.get("/api/v1/community/posts", response_model=list[CommunityPostItem])
 def list_community_posts(
     category: str = Query(default="free", pattern="^(free|question)$"),
+    q: str = Query(default="", max_length=200),
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[CommunityPostItem]:
-    rows = list(db.scalars(
-        select(CommunityPost).where(CommunityPost.category == category).order_by(CommunityPost.created_at.desc()).limit(50)
-    ))
+    blocked_ids = list(db.scalars(select(CommunityBlock.blocked_id).where(CommunityBlock.blocker_id == user.id)))
+    statement = select(CommunityPost).where(CommunityPost.category == category)
+    if blocked_ids:
+        statement = statement.where(CommunityPost.user_id.not_in(blocked_ids))
+    query = q.strip()
+    if query:
+        pattern = f"%{query}%"
+        author_ids = select(User.id).where(or_(User.nickname.ilike(pattern), User.display_name.ilike(pattern)))
+        statement = statement.where(or_(
+            CommunityPost.title.ilike(pattern),
+            CommunityPost.body.ilike(pattern),
+            CommunityPost.user_id.in_(author_ids),
+        ))
+    rows = list(db.scalars(statement.order_by(CommunityPost.created_at.desc()).offset(offset).limit(limit)))
     return [community_post_schema(db, item, user) for item in rows]
 
 
@@ -644,6 +665,151 @@ def create_community_comment(
     db.commit()
     db.refresh(comment)
     return community_comment_schema(db, comment, user)
+
+
+@app.put("/api/v1/community/posts/{post_id}", response_model=CommunityPostItem)
+def update_community_post(
+    post_id: str,
+    request: CommunityPostUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CommunityPostItem:
+    post = db.get(CommunityPost, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post.user_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="You cannot edit this post")
+    post.title = request.title.strip()
+    post.body = request.body.strip()
+    post.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(post)
+    return community_post_schema(db, post, user)
+
+
+@app.delete("/api/v1/community/posts/{post_id}", response_model=GenericResponse)
+def delete_community_post(
+    post_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GenericResponse:
+    post = db.get(CommunityPost, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post.user_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="You cannot delete this post")
+    comment_ids = list(db.scalars(select(CommunityComment.id).where(CommunityComment.post_id == post_id)))
+    db.execute(delete(CommunityReaction).where(
+        or_(
+            (CommunityReaction.target_type == "post") & (CommunityReaction.target_id == post_id),
+            (CommunityReaction.target_type == "comment") & CommunityReaction.target_id.in_(comment_ids or [""]),
+        )
+    ))
+    db.delete(post)
+    db.commit()
+    return GenericResponse(message="Post deleted")
+
+
+@app.put("/api/v1/community/comments/{comment_id}", response_model=CommunityCommentItem)
+def update_community_comment(
+    comment_id: str,
+    request: CommunityCommentUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CommunityCommentItem:
+    comment = db.get(CommunityComment, comment_id)
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment.user_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="You cannot edit this comment")
+    comment.body = request.body.strip()
+    comment.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(comment)
+    return community_comment_schema(db, comment, user)
+
+
+@app.delete("/api/v1/community/comments/{comment_id}", response_model=GenericResponse)
+def delete_community_comment(
+    comment_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GenericResponse:
+    comment = db.get(CommunityComment, comment_id)
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment.user_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="You cannot delete this comment")
+    descendant_ids = [comment_id]
+    pending = [comment_id]
+    while pending:
+        children = list(db.scalars(select(CommunityComment.id).where(CommunityComment.parent_id.in_(pending))))
+        pending = [item for item in children if item not in descendant_ids]
+        descendant_ids.extend(pending)
+    db.execute(delete(CommunityReaction).where(
+        CommunityReaction.target_type == "comment", CommunityReaction.target_id.in_(descendant_ids)
+    ))
+    db.delete(comment)
+    db.commit()
+    return GenericResponse(message="Comment deleted")
+
+
+@app.post("/api/v1/community/reports", response_model=GenericResponse)
+def report_community_target(
+    request: CommunityReportRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GenericResponse:
+    target_exists = (
+        db.get(CommunityPost, request.targetId) if request.targetType == "post"
+        else db.get(CommunityComment, request.targetId) if request.targetType == "comment"
+        else db.get(User, request.targetId)
+    )
+    if target_exists is None:
+        raise HTTPException(status_code=404, detail="Report target not found")
+    existing = db.scalar(select(CommunityReport).where(
+        CommunityReport.reporter_id == user.id,
+        CommunityReport.target_type == request.targetType,
+        CommunityReport.target_id == request.targetId,
+    ))
+    if existing:
+        existing.reason = request.reason.strip()
+        existing.status = "pending"
+    else:
+        db.add(CommunityReport(
+            reporter_id=user.id, target_type=request.targetType,
+            target_id=request.targetId, reason=request.reason.strip(),
+        ))
+    db.commit()
+    return GenericResponse(message="Report submitted")
+
+
+@app.post("/api/v1/community/users/{target_user_id}/block", response_model=CommunityBlockResponse)
+def toggle_community_block(
+    target_user_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CommunityBlockResponse:
+    if target_user_id == user.id:
+        raise HTTPException(status_code=400, detail="You cannot block yourself")
+    if db.get(User, target_user_id) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    existing = db.scalar(select(CommunityBlock).where(
+        CommunityBlock.blocker_id == user.id, CommunityBlock.blocked_id == target_user_id,
+    ))
+    blocked = existing is None
+    if existing:
+        db.delete(existing)
+    else:
+        db.add(CommunityBlock(blocker_id=user.id, blocked_id=target_user_id))
+        db.execute(delete(Follow).where(
+            or_(
+                (Follow.follower_id == user.id) & (Follow.following_id == target_user_id),
+                (Follow.follower_id == target_user_id) & (Follow.following_id == user.id),
+            )
+        ))
+    db.commit()
+    return CommunityBlockResponse(blocked=blocked)
 
 
 @app.post("/api/v1/community/reactions", response_model=ReactionToggleResponse)
@@ -707,6 +873,7 @@ def get_cloud_state(
     return CloudStateResponse(
         snapshot=profile.snapshot if profile else {},
         diamondStatus=diamond_status_for(db, user),
+        learningRecords=cloud_learning_records(db, user.id),
     )
 
 
@@ -753,6 +920,7 @@ def sync_progress(
         syncedAt=datetime.now(timezone.utc).isoformat(),
         diamondStatus=status,
         snapshot=profile.snapshot,
+        learningRecords=cloud_learning_records(db, user.id),
     )
 
 
@@ -959,6 +1127,75 @@ def ai_program_draft(
     return generate_program_draft(db, request)
 
 
+@app.get("/api/v1/admin/community/reports")
+def admin_list_community_reports(
+    status: str = Query(default="pending", pattern="^(pending|resolved|dismissed|all)$"),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    statement = select(CommunityReport).order_by(CommunityReport.created_at.desc())
+    if status != "all":
+        statement = statement.where(CommunityReport.status == status)
+    rows = list(db.scalars(statement.limit(500)))
+    return [
+        {
+            "id": item.id,
+            "reporterId": item.reporter_id,
+            "targetType": item.target_type,
+            "targetId": item.target_id,
+            "reason": item.reason,
+            "status": item.status,
+            "reviewNote": item.review_note,
+            "reviewedBy": item.reviewed_by,
+            "reviewedAt": item.reviewed_at,
+            "createdAt": item.created_at,
+        }
+        for item in rows
+    ]
+
+
+@app.post("/api/v1/admin/community/reports/{report_id}/review", response_model=GenericResponse)
+def admin_review_community_report(
+    report_id: str,
+    request: CommunityModerationRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> GenericResponse:
+    report = db.get(CommunityReport, report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    target = (
+        db.get(CommunityPost, report.target_id) if report.target_type == "post"
+        else db.get(CommunityComment, report.target_id) if report.target_type == "comment"
+        else db.get(User, report.target_id)
+    )
+    if request.action == "delete" and target is not None:
+        if report.target_type == "post":
+            delete_community_post(report.target_id, admin, db)
+        elif report.target_type == "comment":
+            delete_community_comment(report.target_id, admin, db)
+        else:
+            raise HTTPException(status_code=400, detail="User reports require deactivate or none")
+    elif request.action == "deactivate":
+        target_user = target if report.target_type == "user" else None
+        if report.target_type == "post" and target is not None:
+            target_user = db.get(User, target.user_id)
+        elif report.target_type == "comment" and target is not None:
+            target_user = db.get(User, target.user_id)
+        if target_user is None:
+            raise HTTPException(status_code=404, detail="Reported user not found")
+        if target_user.role == "admin":
+            raise HTTPException(status_code=400, detail="Admin accounts cannot be deactivated here")
+        target_user.is_active = False
+    report.status = request.status
+    report.review_note = request.reviewNote.strip()
+    report.reviewed_by = admin.id
+    report.reviewed_at = datetime.now(timezone.utc)
+    db.add(report)
+    db.commit()
+    return GenericResponse(message="Community report review was saved.")
+
+
 @app.get("/api/v1/admin/content", response_model=list[AdminContentItem])
 def admin_list_content(
     content_type: str | None = None,
@@ -995,6 +1232,9 @@ def admin_save_content(
         "method": request.method,
         "category": request.category,
         "description": request.description,
+        "authors": request.authors,
+        "year": request.year,
+        "doi": request.doi,
     }
     db.add(item)
     db.commit()
@@ -1167,6 +1407,9 @@ def content_to_schema(item: Content) -> AdminContentItem:
         method=str(metadata.get("method", "")),
         category=str(metadata.get("category", "")),
         description=str(metadata.get("description", "")),
+        authors=str(metadata.get("authors", "")),
+        year=str(metadata.get("year", "")),
+        doi=str(metadata.get("doi", "")),
     )
 
 
@@ -1251,15 +1494,19 @@ def community_comment_schema(db: Session, comment: CommunityComment, viewer: Use
         author=profile_summary(db, author, viewer),
         body=comment.body,
         createdAt=comment.created_at,
+        updatedAt=comment.updated_at,
+        canEdit=comment.user_id == viewer.id or viewer.role == "admin",
         reactions=reaction_summaries(db, "comment", comment.id, viewer.id),
     )
 
 
 def community_post_schema(db: Session, post: CommunityPost, viewer: User) -> CommunityPostItem:
     author = db.get(User, post.user_id)
-    comments = list(db.scalars(
-        select(CommunityComment).where(CommunityComment.post_id == post.id).order_by(CommunityComment.created_at)
-    ))
+    blocked_ids = list(db.scalars(select(CommunityBlock.blocked_id).where(CommunityBlock.blocker_id == viewer.id)))
+    comment_statement = select(CommunityComment).where(CommunityComment.post_id == post.id)
+    if blocked_ids:
+        comment_statement = comment_statement.where(CommunityComment.user_id.notin_(blocked_ids))
+    comments = list(db.scalars(comment_statement.order_by(CommunityComment.created_at)))
     return CommunityPostItem(
         id=post.id,
         category=post.category,
@@ -1267,9 +1514,30 @@ def community_post_schema(db: Session, post: CommunityPost, viewer: User) -> Com
         title=post.title,
         body=post.body,
         createdAt=post.created_at,
+        updatedAt=post.updated_at,
+        canEdit=post.user_id == viewer.id or viewer.role == "admin",
         reactions=reaction_summaries(db, "post", post.id, viewer.id),
         comments=[community_comment_schema(db, item, viewer) for item in comments],
     )
+
+
+def cloud_learning_records(db: Session, user_id: str) -> list[dict]:
+    rows = db.scalars(
+        select(LearningRecord).where(LearningRecord.user_id == user_id)
+        .order_by(LearningRecord.client_updated_at.asc(), LearningRecord.synced_at.asc())
+        .limit(2000)
+    )
+    return [
+        {
+            "id": item.client_record_id,
+            "recordType": item.record_type,
+            "targetId": item.target_id,
+            "title": item.title,
+            "status": item.status,
+            "updatedAt": item.client_updated_at,
+        }
+        for item in rows
+    ]
 
 
 def diamond_status_for(db: Session, user: User) -> DiamondStatus:
