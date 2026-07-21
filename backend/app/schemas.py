@@ -53,6 +53,8 @@ class CommunityCommentItem(CamelModel):
     author: ProfileSummary
     body: str
     createdAt: datetime
+    updatedAt: datetime
+    canEdit: bool = False
     reactions: list[ReactionSummary] = Field(default_factory=list)
 
 
@@ -63,8 +65,35 @@ class CommunityPostItem(CamelModel):
     title: str
     body: str
     createdAt: datetime
+    updatedAt: datetime
+    canEdit: bool = False
     reactions: list[ReactionSummary] = Field(default_factory=list)
     comments: list[CommunityCommentItem] = Field(default_factory=list)
+
+
+class CommunityPostUpdate(CamelModel):
+    title: str = Field(min_length=2, max_length=240)
+    body: str = Field(min_length=2, max_length=8000)
+
+
+class CommunityCommentUpdate(CamelModel):
+    body: str = Field(min_length=1, max_length=3000)
+
+
+class CommunityReportRequest(CamelModel):
+    targetType: str = Field(pattern="^(post|comment|user)$")
+    targetId: str
+    reason: str = Field(min_length=2, max_length=500)
+
+
+class CommunityBlockResponse(CamelModel):
+    blocked: bool
+
+
+class CommunityModerationRequest(CamelModel):
+    status: str = Field(pattern="^(resolved|dismissed)$")
+    action: str = Field(default="none", pattern="^(none|delete|deactivate)$")
+    reviewNote: str = Field(default="", max_length=1000)
 
 
 class CommunityPostCreate(CamelModel):
@@ -184,16 +213,27 @@ class DiamondStatus(CamelModel):
     message: str
 
 
+class CloudLearningRecord(CamelModel):
+    id: str
+    recordType: str
+    targetId: str
+    title: str = ""
+    status: str = ""
+    updatedAt: int = 0
+
+
 class SyncResponse(CamelModel):
     message: str
     syncedAt: str
     diamondStatus: DiamondStatus
     snapshot: dict[str, Any] = Field(default_factory=dict)
+    learningRecords: list[CloudLearningRecord] = Field(default_factory=list)
 
 
 class CloudStateResponse(CamelModel):
     snapshot: dict[str, Any] = Field(default_factory=dict)
     diamondStatus: DiamondStatus
+    learningRecords: list[CloudLearningRecord] = Field(default_factory=list)
 
 
 class EvidenceRequest(CamelModel):
@@ -242,6 +282,9 @@ class AdminContentItem(CamelModel):
     method: str = ""
     category: str = ""
     description: str = ""
+    authors: str = ""
+    year: str = ""
+    doi: str = ""
 
 
 class AiSearchRequest(CamelModel):
