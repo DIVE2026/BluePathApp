@@ -939,7 +939,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderHome() {
-        addTabIntro("", "TODAY'S ROUTE", "홈 · 오늘의 항로", "최근 활동 흐름과 추천 자료를 확인합니다.");
+        addTabIntro(
+                "",
+                "TODAY'S ROUTE",
+                "홈 · 오늘의 항로",
+                "나의 티어·XP와 연도별 활동 기록을 한눈에 확인하고, 관심 분야와 목표에 맞춘 AI 학습 자료와 교육 일정을 추천받아보세요.\n\n"
+                        + "목표 직무별 맞춤 항로를 생성해 활동 전후의 역량과 진로 준비도 변화를 미리 살펴보고, 필요하면 일정과 난이도에 맞게 항로를 다시 조정할 수 있습니다. "
+                        + "박물관에서는 QR 가족 협동 미션에 참여해 현장 활동과 획득 역량까지 하나의 해양 커리어 여정으로 기록할 수 있습니다."
+        );
         maybeRefreshDashboard();
         UserProfile p = store.getProfile();
         String tier = store.getTier();
