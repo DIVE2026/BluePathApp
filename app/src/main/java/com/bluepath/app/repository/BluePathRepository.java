@@ -11,6 +11,7 @@ import com.bluepath.app.network.ApiClient;
 import com.bluepath.app.network.ApiModels;
 import com.bluepath.app.network.BluePathApi;
 import com.bluepath.app.storage.UserStore;
+import com.bluepath.app.util.NotificationHelper;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -82,6 +83,8 @@ public class BluePathRepository {
         Response<ApiModels.CloudStateResponse> response = api.cloudState(bearer()).execute();
         ApiModels.CloudStateResponse body = requireBody(response, "클라우드 기록 불러오기");
         store.applyCloudSnapshot(body.snapshot);
+        restoreCloudRecords(body.learningRecords);
+        restoreReminderSchedule();
         if (body.diamondStatus != null) store.applyDiamondStatus(body.diamondStatus);
         return body;
     }
@@ -98,6 +101,8 @@ public class BluePathRepository {
         if (!ids.isEmpty()) learningDao.markSynced(ids);
         store.setLastSyncAt(body.syncedAt == null ? "방금 전" : body.syncedAt);
         if (body.snapshot != null) store.applyCloudSnapshot(body.snapshot);
+        restoreCloudRecords(body.learningRecords);
+        restoreReminderSchedule();
         if (body.diamondStatus != null) store.applyDiamondStatus(body.diamondStatus);
         return body.message == null ? "학습 기록을 동기화했습니다." : body.message;
     }
@@ -203,9 +208,14 @@ public class BluePathRepository {
         return body;
     }
 
-    public List<ApiModels.CommunityPostDto> communityPosts(String category) throws IOException {
+    public List<ApiModels.CommunityPostDto> communityPosts(String category, String query, int limit, int offset) throws IOException {
         requireAuthenticated();
-        return requireBody(api.communityPosts(bearer(), category).execute(), "커뮤니티 불러오기");
+        return requireBody(api.communityPosts(bearer(), category, query == null ? "" : query, limit, offset)
+                .execute(), "커뮤니티 불러오기");
+    }
+
+    public List<ApiModels.CommunityPostDto> communityPosts(String category) throws IOException {
+        return communityPosts(category, "", 20, 0);
     }
 
     public ApiModels.CommunityPostDto createCommunityPost(String category, String title, String body) throws IOException {
@@ -222,6 +232,39 @@ public class BluePathRepository {
                 bearer(), postId, new ApiModels.CommunityCommentRequest(body, parentId)).execute(), "댓글 작성");
         store.recordActivity("community_comment", 1);
         return result;
+    }
+
+    public ApiModels.CommunityPostDto updateCommunityPost(String postId, String title, String body) throws IOException {
+        requireAuthenticated();
+        return requireBody(api.updateCommunityPost(bearer(), postId,
+                new ApiModels.CommunityPostUpdateRequest(title, body)).execute(), "게시글 수정");
+    }
+
+    public void deleteCommunityPost(String postId) throws IOException {
+        requireAuthenticated();
+        requireBody(api.deleteCommunityPost(bearer(), postId).execute(), "게시글 삭제");
+    }
+
+    public ApiModels.CommunityCommentDto updateCommunityComment(String commentId, String body) throws IOException {
+        requireAuthenticated();
+        return requireBody(api.updateCommunityComment(bearer(), commentId,
+                new ApiModels.CommunityCommentUpdateRequest(body)).execute(), "댓글 수정");
+    }
+
+    public void deleteCommunityComment(String commentId) throws IOException {
+        requireAuthenticated();
+        requireBody(api.deleteCommunityComment(bearer(), commentId).execute(), "댓글 삭제");
+    }
+
+    public void reportCommunity(String targetType, String targetId, String reason) throws IOException {
+        requireAuthenticated();
+        requireBody(api.reportCommunity(bearer(), new ApiModels.CommunityReportRequest(targetType, targetId, reason))
+                .execute(), "커뮤니티 신고");
+    }
+
+    public boolean toggleBlock(String userId) throws IOException {
+        requireAuthenticated();
+        return requireBody(api.toggleBlock(bearer(), userId).execute(), "사용자 차단").blocked;
     }
 
     public ApiModels.ReactionToggleResponse toggleReaction(String targetType, String targetId, String emoji) throws IOException {
@@ -279,6 +322,25 @@ public class BluePathRepository {
         ApiModels.DiamondStatus body = requireBody(response, "다이아 진행 상태 조회");
         store.applyDiamondStatus(body);
         return body;
+    }
+
+    private void restoreCloudRecords(List<ApiModels.CloudLearningRecordDto> records) {
+        if (records == null) return;
+        for (ApiModels.CloudLearningRecordDto item : records) {
+            if (item == null || item.recordType == null || item.targetId == null) continue;
+            String status = item.status == null ? "" : item.status;
+            if (learningDao.countEquivalent(item.recordType, item.targetId, status, item.updatedAt) > 0) continue;
+            learningDao.insert(new LearningRecord(item.recordType, item.targetId,
+                    item.title == null ? "" : item.title, status, item.updatedAt, true));
+        }
+    }
+
+    private void restoreReminderSchedule() {
+        if (store.isReminderEnabled()) {
+            NotificationHelper.scheduleDaily(context, store.getReminderHour(), store.getReminderMinute());
+        } else {
+            NotificationHelper.cancelDaily(context);
+        }
     }
 
     public void logout() {
