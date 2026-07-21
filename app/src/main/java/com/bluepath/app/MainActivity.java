@@ -782,20 +782,64 @@ public class MainActivity extends AppCompatActivity {
         sideHead.addView(close, new LinearLayout.LayoutParams(dp(44), dp(40)));
         sidebar.addView(sideHead);
 
+        TextView navGuide = label("탭별 기능 안내");
+        navGuide.setPadding(dp(4), dp(14), dp(4), dp(6));
+        sidebar.addView(navGuide);
 
-        addNavButton("✦  AI 진로 상담", 4);
-        addNavButton("⌂  홈", 0);
-        addNavButton("▶  학습 자료", 1);
-        addNavButton("✓  퀴즈", 2);
-        addNavButton("◷  일정", 3);
-        addNavButton("≋  해양 커뮤니티", 5);
-        addNavButton("●  MY", 6);
+        ScrollView navScroll = new ScrollView(this);
+        navScroll.setFillViewport(true);
+        navScroll.setVerticalScrollBarEnabled(false);
+        navScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
 
-        View sideSpacer = new View(this);
-        sidebar.addView(sideSpacer, new LinearLayout.LayoutParams(1, 0, 1));
-        TextView sideNote = body("메뉴는 언제든 열고 닫을 수 있습니다. 각 탭 상단에서 목적과 사용 방법을 먼저 확인하세요.");
-        sideNote.setTextColor(MUTED);
-        sidebar.addView(sideNote);
+        LinearLayout navList = new LinearLayout(this);
+        navList.setOrientation(LinearLayout.VERTICAL);
+        navList.setPadding(0, 0, 0, dp(8));
+
+        addNavButton(
+                navList,
+                "✦  AI 진로 상담",
+                4,
+                "직무·전공·자격·프로젝트를 자유롭게 질문하고, 내 프로필과 앱 학습 자료 및 가능한 웹 근거를 반영한 맞춤 답변을 확인합니다. NCS 기반 추천 직무와 단계별 준비 항로도 함께 살펴볼 수 있습니다."
+        );
+        addNavButton(
+                navList,
+                "⌂  홈",
+                0,
+                "티어·XP·연도별 활동 기록을 한눈에 보고 AI 추천 학습 자료와 교육 일정을 확인합니다. 목표 직무별 맞춤 항로 생성, 미래 효과 시뮬레이션, 재항해와 QR 가족 협동 미션도 이용할 수 있습니다."
+        );
+        addNavButton(
+                navList,
+                "▶  학습 자료",
+                1,
+                "문장형 AI 검색으로 필요한 해양 자료를 찾고 영상·논문을 구분해 탐색합니다. 난도, 권장 티어, 연결 진로와 추천 근거를 확인하고 찜, 시청, 학습 완료 인증과 XP 기록을 관리합니다."
+        );
+        addNavButton(
+                navList,
+                "✓  퀴즈",
+                2,
+                "현재 티어에 맞는 제한 시간 퀴즈를 풀고 문항별 정답, 해설, 점수, XP와 승급 결과를 확인합니다. 주제별 강점과 부족한 역량은 다음 학습 및 진로 추천에 반영됩니다."
+        );
+        addNavButton(
+                navList,
+                "◷  일정",
+                3,
+                "지역·대상·시기·주제를 문장으로 검색하거나 태그와 모집 상태로 교육·행사를 필터링합니다. 월별 달력, 날짜별 일정, 온라인 활동, 찜과 기기 캘린더 추가 기능을 제공합니다."
+        );
+        addNavButton(
+                navList,
+                "≋  해양 커뮤니티",
+                5,
+                "자유·질문 게시판에서 글을 작성하고 최신 목록을 새로고침합니다. 작성자 팔로우, 게시글·댓글 공감, 댓글과 답글을 통해 다른 사용자와 학습 경험과 질문을 나눌 수 있습니다."
+        );
+        addNavButton(
+                navList,
+                "●  MY",
+                6,
+                "프로필, 티어, XP와 활동 통계를 관리하고 Ocean Skill Map에서 분야별 숙련도와 근거를 확인합니다. 포트폴리오 PDF, 완료·찜 기록, 알림, 동기화, 보호자 동의와 계정 설정도 관리합니다."
+        );
+
+        navScroll.addView(navList, new FrameLayout.LayoutParams(-1, -2));
+        sidebar.addView(navScroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
         renderTab(tab);
     }
@@ -858,20 +902,38 @@ public class MainActivity extends AppCompatActivity {
         sidebar.animate().translationX(-dp(286)).setDuration(190).withEndAction(() -> sidebar.setVisibility(View.GONE)).start();
     }
 
-    private void addNavButton(String label, int tab) {
+    private void addNavButton(LinearLayout parent, String label, int tab, String description) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setPadding(dp(4), dp(2), dp(4), dp(10));
+        item.setBackgroundResource(tab == currentTab
+                ? R.drawable.bg_nav_selected
+                : android.R.color.transparent);
+        item.setOnClickListener(v -> showApp(tab));
+
         Button b = new Button(this);
         b.setText(label);
         b.setTextSize(14);
         b.setAllCaps(false);
         b.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        b.setPadding(dp(16), 0, dp(12), 0);
+        b.setPadding(dp(12), 0, dp(8), 0);
         b.setTextColor(tab == currentTab ? NAVY : TEXT);
         b.setTypeface(Typeface.DEFAULT, tab == currentTab ? Typeface.BOLD : Typeface.NORMAL);
-        b.setBackgroundResource(tab == currentTab ? R.drawable.bg_nav_selected : android.R.color.transparent);
+        b.setBackgroundColor(Color.TRANSPARENT);
         b.setOnClickListener(v -> showApp(tab));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(52));
-        params.setMargins(0, dp(2), 0, dp(2));
-        sidebar.addView(b, params);
+        item.addView(b, new LinearLayout.LayoutParams(-1, dp(44)));
+
+        TextView detail = body(description);
+        detail.setTextSize(10.5f);
+        detail.setTextColor(tab == currentTab ? TEXT : MUTED);
+        detail.setLineSpacing(dp(1), 1.05f);
+        detail.setPadding(dp(12), 0, dp(10), 0);
+        detail.setOnClickListener(v -> showApp(tab));
+        item.addView(detail, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.setMargins(0, 0, 0, dp(2));
+        parent.addView(item, params);
     }
 
     private void renderTab(int tab) {
@@ -1669,7 +1731,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderLearning() {
-        addTabIntro("", "LEARNING LIBRARY", "학습 자료 · 맞춤 콘텐츠", "필요한 자료를 검색하고 영상과 논문을 구분해 탐색합니다.");
+        addTabIntro(
+                "",
+                "LEARNING LIBRARY",
+                "학습 자료 · 맞춤 콘텐츠",
+                "관심 분야, 현재 티어와 학습 목표에 맞는 해양 자료를 문장으로 검색하고, 영상과 논문 탭을 구분해 필요한 콘텐츠를 탐색해 보세요. "
+                        + "AI 검색은 앱에 등록된 자료를 우선 활용하며, 가능한 경우 실시간 웹 근거까지 함께 검토해 결과와 요약을 보여줍니다.\n\n"
+                        + "영상 탭에서는 입문·진로 탐색·직무 심화 난도별 라이브러리를 확인할 수 있습니다. 각 카드에서 권장 티어, 적합도, 출처, 소요 시간, 분야, 연결 진로와 추천 이유를 살펴보고, "
+                        + "영상을 시작하거나 이어서 시청하고 찜 목록에 저장할 수 있습니다. 시청 후에는 핵심 내용을 제출해 학습 완료를 인증하고 XP와 역량 기록에 반영할 수 있으며, 논문 탭에서는 별도로 분류된 자료의 준비 상태를 확인할 수 있습니다."
+        );
         addAiSearchBox(learningSubTab, "예: 해양환경 입문자가 20분 안에 볼 만한 영상이나 논문 찾아줘", learningSearchLoading, learningSearchResponse);
 
         LinearLayout tabs = row();
@@ -1735,7 +1805,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderQuiz() {
-        addTabIntro("", "SKILL CHECK", "퀴즈 · 역량 진단", "퀴즈 결과는 단순히 승급 점수만 보여주는 데 그치지 않습니다. 문항별로 어떤 주제에 강하고 부족한지 분석해, 다음 학습과 진로 추천에 반영합니다.");
+        addTabIntro(
+                "",
+                "SKILL CHECK",
+                "퀴즈 · 역량 진단",
+                "현재 통합 티어와 다음 승급 기준을 확인한 뒤, 내 관심 분야와 학습 기록에 맞춘 4지선다 퀴즈에 도전해 보세요. "
+                        + "서버 연결 시에는 해양 AI가 앱 자료와 공공·기관 근거를 바탕으로 문제를 만들고, 연결이 어려울 때는 검증된 해양 로컬 문제은행으로 자동 전환됩니다.\n\n"
+                        + "퀴즈 세션은 티어별 문항 수와 합격선이 적용되며 30초 제한 시간이 지나면 미응답 문항까지 자동 제출됩니다. 제출 후에는 점수, 정답 여부, 내가 고른 답, 정답과 해설, 획득 XP와 승급 결과를 문항별로 확인할 수 있습니다. "
+                        + "각 주제의 정답·오답 기록은 MY의 역량 여권과 다음 학습·진로 추천에 반영되며, 같은 티어의 새 퀴즈에 다시 도전하거나 승급 기준 전체 매뉴얼을 확인할 수 있습니다."
+        );
         String currentTier = store.getTier();
         content.addView(sectionTitle("AI 승급 퀴즈"));
         LinearLayout currentTierCard = card();
@@ -2049,7 +2127,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderSchedule() {
-        addTabIntro("", "LIVE & ARCHIVE", "일정 · 교육 탐색", "문장으로 물어보는 AI 검색과, 태그·모집 현황으로 좁혀보는 일정 둘러보기를 함께 제공합니다.");
+        addTabIntro(
+                "",
+                "LIVE & ARCHIVE",
+                "일정 · 교육 탐색",
+                "지역, 대상, 시기와 관심 주제를 문장으로 입력해 해양 교육·행사를 AI로 찾거나, 분야 태그와 진행 상태를 선택해 전체 일정을 직접 둘러보세요. "
+                        + "AI 검색 결과는 앱 자료와 가능한 실시간 웹 근거를 바탕으로 별도 영역에 표시되므로, 아래의 기본 일정 목록과 필터는 그대로 유지됩니다.\n\n"
+                        + "오프라인 일정은 월별 달력에서 점으로 표시되며 이전·다음 달을 이동하고 날짜를 눌러 해당 일정을 모아볼 수 있습니다. 온라인·상시 활동은 별도 목록에서 더보기와 접기를 지원합니다. "
+                        + "각 교육 과정과 이벤트 카드에서는 모집 상태, 대상, 운영 방식, 기간, 설명, 추천 점수와 추천 이유를 확인하고 찜 목록에 저장할 수 있으며, 신청 가능한 교육 과정은 기기 캘린더에 바로 추가할 수 있습니다. 종료된 일정도 유사 활동 탐색과 관심 분석을 위한 아카이브로 확인할 수 있습니다."
+        );
 
         content.addView(sectionTitle("AI로 활동 찾기"));
         addAiSearchBox("schedule", "예: 부산에서 고등학생이 여름방학에 참여할 해양 안전 교육이 있을까?", scheduleSearchLoading, scheduleSearchResponse);
@@ -2250,7 +2336,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderCareer() {
-        addTabIntro("", "UNIVERSAL CAREER AI", "AI 진로 상담", "상용 LLM 수준의 질의응답, 앱 내부 RAG, 선택형 실시간 웹 검색을 결합해 진로와 학습 경로를 안내합니다.");
+        addTabIntro(
+                "",
+                "UNIVERSAL CAREER AI",
+                "AI 진로 상담",
+                "궁금한 해양 직무, 전공, 자격, 프로젝트와 학습 순서를 자유롭게 질문하면 BluePath AI가 내 관심 분야, 현재 티어와 앱의 학습 자료를 함께 검토해 맞춤 답변을 제공합니다. "
+                        + "서버가 연결된 경우 기관 자료와 설정된 실시간 웹 검색 결과를 근거로 답변하고, 연결 전에는 오프라인 해양 상담 엔진으로 기본 진로 경로를 안내합니다.\n\n"
+                        + "직접 질문을 입력하거나 항해사 역량 로드맵, 스마트 항만 직무, 해양환경 연구자 준비 같은 추천 질문을 바로 선택할 수 있습니다. 답변 아래에서는 NCS 기반 추천 직무를 살펴보며 직무 적합도, 권장 티어, 업무 설명, 추천 이유, 필요한 역량, 연결 기관과 근무지 예시를 확인하고, "
+                        + "역량 진단 → 근거 영상 학습 → 승급 퀴즈 → 실제 교육 과정 → 자격·프로젝트 증빙으로 이어지는 준비 항로를 설계할 수 있습니다."
+        );
         UserProfile p = store.getProfile();
         String tier = store.getTier();
 
@@ -2377,7 +2471,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderCommunity() {
-        addTabIntro("", "OCEAN COMMUNITY", "해양 커뮤니티", "자유 게시판과 질문 게시판에서 여러 유저와 소통하여 함께 성장할 수 있습니다.");
+        addTabIntro(
+                "",
+                "OCEAN COMMUNITY",
+                "해양 커뮤니티",
+                "자유 게시판에서는 해양 학습과 활동 경험을 나누고, 질문 게시판에서는 궁금한 내용을 다른 사용자에게 묻고 답하며 함께 성장해 보세요. "
+                        + "화면 오른쪽 아래의 글쓰기 버튼으로 현재 게시판에 새 글을 등록하고, 목록 최상단에서 아래로 당기면 최신 게시글을 다시 불러올 수 있습니다.\n\n"
+                        + "게시글 카드에서 작성자의 프로필, 통합 티어, 팔로워 수와 작성 시각을 확인하고 원하는 사용자를 팔로우할 수 있습니다. 게시글과 댓글에는 여러 공감 이모지를 남기거나 취소할 수 있으며, 댓글 작성과 댓글에 대한 답글을 통해 대화를 이어갈 수 있습니다. "
+                        + "자유·질문 게시판을 전환하면 해당 분류의 글만 모아볼 수 있습니다."
+        );
 
         LinearLayout tabs = row();
         Button free = "free".equals(communityCategory) ? primaryButton("자유 게시판") : outlineButton("자유 게시판");
@@ -2593,7 +2695,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderMyPage() {
-        addTabIntro("", "MY OCEAN PAGE", "MY · 나의 해양 여권", "학습과 계정 설정을 관리합니다.");
+        addTabIntro(
+                "",
+                "MY OCEAN PAGE",
+                "MY · 나의 해양 여권",
+                "내 프로필 사진, 관심 분야, 목표, 통합 티어, XP, 팔로워·팔로잉 수와 학습·찜·퀴즈 통계를 한곳에서 확인하세요. "
+                        + "Ocean Skill Map에서는 퀴즈, 학습 완료와 현장 미션으로 쌓인 분야별 숙련도와 증거를 살펴보고, 노드를 눌러 점수 근거, 하위 역량, NCS 연계, 연결 진로와 다음 추천 활동을 확인할 수 있습니다.\n\n"
+                        + "검증된 학습·미션 기록은 목표 진로 준비도와 증거 코드가 포함된 해양 역량 포트폴리오로 미리 보거나 PDF로 생성해 공유할 수 있습니다. 승급·학습 리포트에서는 티어별 최고 퀴즈 점수와 최근 결과를 확인하고, 완료한 영상과 찜한 항목도 다시 살펴볼 수 있습니다.\n\n"
+                        + "연령대, 관심 분야, 학습 목적과 현재 수준을 수정하고 프로필 사진을 업로드할 수 있으며, 미성년 계정의 보호자 동의와 클라우드 동기화, 최신 학습 자료 불러오기, 로그아웃을 관리할 수 있습니다. "
+                        + "매일 학습 알림의 시간 설정·해제와 시험·자격 일정의 캘린더 추가를 지원하며, 플래티넘 이상에서는 다이아 고급 퀴즈·자격 증빙·해양 프로젝트 제출 및 검토 상태를 관리할 수 있습니다. 필요할 때는 기기의 프로필과 학습 기록 전체를 초기화할 수 있습니다."
+        );
         UserProfile p = store.getProfile();
         String tier = store.getTier();
 
