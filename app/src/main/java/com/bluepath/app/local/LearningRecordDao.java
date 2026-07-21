@@ -20,4 +20,7 @@ public interface LearningRecordDao {
 
     @Query("SELECT COUNT(*) FROM learning_records")
     int countAll();
+
+    @Query("SELECT COUNT(*) FROM learning_records WHERE recordType = :recordType AND targetId = :targetId AND status = :status AND updatedAt = :updatedAt")
+    int countEquivalent(String recordType, String targetId, String status, long updatedAt);
 }
