@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -54,6 +55,7 @@ public class BluePathRepository {
         ApiModels.AuthResponse body = requireBody(response, "회원가입");
         store.saveCloudSession(body.email, body.displayName, body.nickname, body.profileImageUrl,
                 body.followerCount, body.followingCount, body.joinedAt, body.accessToken);
+        migrateLegacyLearningRecords();
         syncNow();
         refreshCatalog();
     }
@@ -65,8 +67,9 @@ public class BluePathRepository {
         ApiModels.AuthResponse body = requireBody(response, "로그인");
         store.saveCloudSession(body.email, body.displayName, body.nickname, body.profileImageUrl,
                 body.followerCount, body.followingCount, body.joinedAt, body.accessToken);
-        ApiModels.CloudStateResponse cloud = pullCloudState();
-        if (cloud.snapshot == null || cloud.snapshot.isEmpty()) syncNow();
+        migrateLegacyLearningRecords();
+        pullCloudState();
+        syncNow();
         refreshCatalog();
     }
 
@@ -83,6 +86,7 @@ public class BluePathRepository {
         Response<ApiModels.CloudStateResponse> response = api.cloudState(bearer()).execute();
         ApiModels.CloudStateResponse body = requireBody(response, "클라우드 기록 불러오기");
         store.applyCloudSnapshot(body.snapshot);
+        store.setCloudVersion(body.version);
         restoreCloudRecords(body.learningRecords);
         restoreReminderSchedule();
         if (body.diamondStatus != null) store.applyDiamondStatus(body.diamondStatus);
@@ -91,14 +95,17 @@ public class BluePathRepository {
 
     public String syncNow() throws IOException {
         requireAuthenticated();
-        List<LearningRecord> pending = learningDao.unsynced();
+        String accountId = store.getAccountScope();
+        normalizeLegacyRecordIds(accountId);
+        List<LearningRecord> pending = learningDao.unsynced(accountId);
         Response<ApiModels.SyncResponse> response = api.sync(
-                bearer(),
-                new ApiModels.SyncRequest(store.toCloudSnapshot(), pending)).execute();
+                bearer(), new ApiModels.SyncRequest(
+                        store.toCloudSnapshot(), pending, store.getCloudVersion(), store.getDeviceId())).execute();
         ApiModels.SyncResponse body = requireBody(response, "클라우드 동기화");
-        List<Long> ids = new ArrayList<>();
-        for (LearningRecord record : pending) ids.add(record.id);
-        if (!ids.isEmpty()) learningDao.markSynced(ids);
+        if (body.acceptedRecordIds != null && !body.acceptedRecordIds.isEmpty()) {
+            learningDao.markSynced(accountId, body.acceptedRecordIds);
+        }
+        store.setCloudVersion(body.version);
         store.setLastSyncAt(body.syncedAt == null ? "방금 전" : body.syncedAt);
         if (body.snapshot != null) store.applyCloudSnapshot(body.snapshot);
         restoreCloudRecords(body.learningRecords);
@@ -303,8 +310,57 @@ public class BluePathRepository {
     }
 
     public void recordLearning(String type, String targetId, String title, String status) {
-        learningDao.insert(new LearningRecord(type, targetId, title, status,
+        learningDao.insert(new LearningRecord(store.getAccountScope(), type, targetId, title, status,
                 System.currentTimeMillis(), false));
+    }
+
+    public ApiModels.ProgramParticipationResponse saveProgramParticipation(
+            String programId, String title, String status, Integer preAssessment, Integer postAssessment) throws IOException {
+        requireAuthenticated();
+        return requireBody(api.saveProgramParticipation(bearer(), new ApiModels.ProgramParticipationRequest(
+                programId, title, status, preAssessment, postAssessment)).execute(), "교육 참여 기록");
+    }
+
+    public ApiModels.PaperCompletionResponse completePaper(String contentId, String reflection) throws IOException {
+        requireAuthenticated();
+        ApiModels.PaperCompletionResponse body = requireBody(api.completePaper(
+                bearer(), new ApiModels.PaperCompletionRequest(contentId, reflection)).execute(), "논문 학습 검증");
+        pullCloudState();
+        return body;
+    }
+
+    public ApiModels.VideoEvidenceResponse verifyVideo(String contentId, int durationSeconds, List<ApiModels.VideoInterval> intervals) throws IOException {
+        requireAuthenticated();
+        ApiModels.VideoEvidenceResponse body = requireBody(api.verifyVideo(
+                bearer(), new ApiModels.VideoEvidenceRequest(contentId, durationSeconds, intervals)).execute(), "영상 학습 검증");
+        pullCloudState();
+        return body;
+    }
+
+    public ApiModels.GuardianConsentStatus requestGuardianConsent(String email) throws IOException {
+        requireAuthenticated();
+        return requireBody(api.requestGuardianConsent(
+                bearer(), new ApiModels.GuardianConsentRequest(email, "2026-07")).execute(), "보호자 동의 요청");
+    }
+
+    public ApiModels.GuardianConsentStatus refreshGuardianConsent() throws IOException {
+        requireAuthenticated();
+        ApiModels.GuardianConsentStatus status = requireBody(api.guardianConsentStatus(bearer()).execute(), "보호자 동의 상태 확인");
+        store.saveGuardianConsent("confirmed".equals(status.status), status.guardianEmail);
+        return status;
+    }
+
+    public ApiModels.GuardianConsentStatus revokeGuardianConsent() throws IOException {
+        requireAuthenticated();
+        ApiModels.GuardianConsentStatus status = requireBody(api.revokeGuardianConsent(bearer()).execute(), "보호자 동의 철회");
+        store.saveGuardianConsent(false, status.guardianEmail);
+        return status;
+    }
+
+    public ApiModels.PortfolioCredentialResponse issuePortfolioCredential() throws IOException {
+        requireAuthenticated();
+        return requireBody(api.issuePortfolioCredential(
+                bearer(), new ApiModels.PortfolioIssueRequest("BluePath Ocean Skill Passport")).execute(), "포트폴리오 인증 발급");
     }
 
     public String submitDiamondEvidence(String evidenceType, String title, String evidenceUrl) throws IOException {
@@ -326,13 +382,34 @@ public class BluePathRepository {
 
     private void restoreCloudRecords(List<ApiModels.CloudLearningRecordDto> records) {
         if (records == null) return;
+        String accountId = store.getAccountScope();
         for (ApiModels.CloudLearningRecordDto item : records) {
             if (item == null || item.recordType == null || item.targetId == null) continue;
+            String clientId = normalizedClientRecordId(item.id, accountId + ":" + item.id);
+            if (learningDao.countClientRecord(accountId, clientId) > 0) continue;
             String status = item.status == null ? "" : item.status;
-            if (learningDao.countEquivalent(item.recordType, item.targetId, status, item.updatedAt) > 0) continue;
-            learningDao.insert(new LearningRecord(item.recordType, item.targetId,
+            learningDao.insert(new LearningRecord(clientId, accountId, item.recordType, item.targetId,
                     item.title == null ? "" : item.title, status, item.updatedAt, true));
         }
+    }
+
+    private void migrateLegacyLearningRecords() {
+        if (store.consumeLegacyRecordMigrationFlag()) {
+            learningDao.reassignAccount("guest", store.getAccountScope());
+        }
+        normalizeLegacyRecordIds(store.getAccountScope());
+    }
+
+    private void normalizeLegacyRecordIds(String accountId) {
+        for (LearningRecord record : learningDao.legacyWithoutUuid(accountId)) {
+            record.clientRecordId = UUID.randomUUID().toString();
+            learningDao.update(record);
+        }
+    }
+
+    private String normalizedClientRecordId(String value, String seed) {
+        try { return UUID.fromString(value).toString(); }
+        catch (Exception ignored) { return UUID.nameUUIDFromBytes(seed.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString(); }
     }
 
     private void restoreReminderSchedule() {
