@@ -1,5 +1,6 @@
 package com.bluepath.app;
 
+import android.animation.LayoutTransition;
 import android.app.AlertDialog;
 import android.Manifest;
 import android.content.ClipData;
@@ -1018,13 +1019,30 @@ public class MainActivity extends AppCompatActivity {
         copy.addView(title);
         top.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
         intro.addView(top);
+
+        intro.setLayoutTransition(new LayoutTransition());
+        TextView toggle = new TextView(this);
+        toggle.setText("사용 방법 안내 ▾");
+        toggle.setTextColor(Color.parseColor("#9EF5F0"));
+        toggle.setTextSize(12);
+        toggle.setTypeface(Typeface.DEFAULT_BOLD);
+        toggle.setPadding(0, dp(10), 0, dp(2));
+        intro.addView(toggle);
+
         TextView desc = new TextView(this);
         desc.setText(description);
         desc.setTextColor(Color.parseColor("#D9FFFF"));
         desc.setTextSize(13);
         desc.setLineSpacing(dp(2), 1.05f);
-        desc.setPadding(0, dp(10), 0, 0);
+        desc.setPadding(0, dp(6), 0, 0);
+        desc.setVisibility(View.GONE);
         intro.addView(desc);
+
+        toggle.setOnClickListener(v -> {
+            boolean open = desc.getVisibility() == View.VISIBLE;
+            desc.setVisibility(open ? View.GONE : View.VISIBLE);
+            toggle.setText(open ? "사용 방법 안내 ▾" : "사용 방법 안내 ▴");
+        });
         content.addView(intro);
     }
 
@@ -1152,7 +1170,8 @@ public class MainActivity extends AppCompatActivity {
             content.addView(sectionTitle("관람객 데이터 기반 추천 근거"));
             LinearLayout insightCard = card();
             insightCard.addView(big("실제 관람객 " + DataRepository.surveySampleSize() + "명 응답 분석"));
-            for (int i = 0; i < Math.min(4, insights.size()); i++) insightCard.addView(body("• " + insights.get(i)));
+            LinearLayout insightPanel = addExpandable(insightCard, "분석 인사이트 " + insights.size() + "개");
+            for (String insight : insights) insightPanel.addView(body("• " + insight));
             content.addView(insightCard);
         }
     }
@@ -1232,10 +1251,10 @@ public class MainActivity extends AppCompatActivity {
             voyage.addView(reroute);
 
             if (currentRoute.sources != null && !currentRoute.sources.isEmpty()) {
-                voyage.addView(label("항로 설명에 사용한 근거"));
-                for (int i = 0; i < Math.min(3, currentRoute.sources.size()); i++) {
-                    ApiModels.SourceDto source = currentRoute.sources.get(i);
-                    voyage.addView(body("• " + safe(source.title) + (safe(source.organization).isEmpty()
+                LinearLayout sourcePanel = addExpandable(voyage,
+                        "항로 설명에 사용한 근거 " + currentRoute.sources.size() + "개");
+                for (ApiModels.SourceDto source : currentRoute.sources) {
+                    sourcePanel.addView(body("• " + safe(source.title) + (safe(source.organization).isEmpty()
                             ? "" : " · " + source.organization)));
                 }
             }
@@ -1264,9 +1283,10 @@ public class MainActivity extends AppCompatActivity {
         nodeCard.addView(body("왜 이 순서인가 · " + safe(node.whyThisOrder)));
         addReasonList(nodeCard, node.recommendationReasons);
         if (node.evidenceBasis != null && !node.evidenceBasis.isEmpty()) {
-            nodeCard.addView(label("데이터 근거"));
-            for (int i = 0; i < Math.min(3, node.evidenceBasis.size()); i++) {
-                nodeCard.addView(body("• " + node.evidenceBasis.get(i)));
+            LinearLayout evidencePanel = addExpandable(nodeCard,
+                    "데이터 근거 " + node.evidenceBasis.size() + "개");
+            for (String evidence : node.evidenceBasis) {
+                evidencePanel.addView(body("• " + evidence));
             }
         }
         LinearLayout actions = row();
@@ -3486,10 +3506,43 @@ public class MainActivity extends AppCompatActivity {
         parent.addView(progress, params);
     }
 
+    private LinearLayout addExpandable(LinearLayout parent, String titleText) {
+        LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        wrapper.setLayoutTransition(new LayoutTransition());
+
+        LinearLayout header = row();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView titleView = label(titleText);
+        header.addView(titleView);
+        TextView arrow = new TextView(this);
+        arrow.setText("▾");
+        arrow.setTextColor(OCEAN);
+        arrow.setTextSize(16);
+        arrow.setTypeface(Typeface.DEFAULT_BOLD);
+        arrow.setPadding(dp(6), dp(4), dp(6), 0);
+        header.addView(arrow);
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setVisibility(View.GONE);
+
+        header.setOnClickListener(v -> {
+            boolean open = panel.getVisibility() == View.VISIBLE;
+            panel.setVisibility(open ? View.GONE : View.VISIBLE);
+            arrow.setText(open ? "▾" : "▴");
+        });
+
+        wrapper.addView(header);
+        wrapper.addView(panel);
+        parent.addView(wrapper);
+        return panel;
+    }
+
     private void addReasonList(LinearLayout parent, List<String> reasons) {
         if (reasons == null || reasons.isEmpty()) return;
-        parent.addView(label("추천 근거"));
-        for (int i = 0; i < Math.min(4, reasons.size()); i++) parent.addView(body("• " + reasons.get(i)));
+        LinearLayout panel = addExpandable(parent, "추천 근거 " + reasons.size() + "개");
+        for (String reason : reasons) panel.addView(body("• " + reason));
     }
 
     private String joinList(List<String> values, String separator) {
