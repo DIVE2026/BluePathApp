@@ -8,6 +8,7 @@ import json
 import math
 import re
 import socket
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -323,6 +324,93 @@ def answer_agent(db: Session, request: AgentRequest) -> AgentResponse:
     return AgentResponse(answer=answer, sources=source_items)
 
 
+def sync_schedule_feeds(db: Session, feed_urls: list[str], timeout_seconds: int = 20) -> dict[str, Any]:
+    imported = 0
+    removed = 0
+    errors: list[str] = []
+    refreshed_at = datetime.now(timezone.utc).isoformat()
+    for feed_url in feed_urls:
+        if not is_safe_public_url(feed_url):
+            errors.append(f"unsafe or invalid feed url: {feed_url}")
+            continue
+        try:
+            response = httpx.get(
+                feed_url,
+                follow_redirects=True,
+                headers={"User-Agent": "BluePathScheduleSync/1.0"},
+                timeout=max(5, timeout_seconds),
+            )
+            response.raise_for_status()
+            if not is_safe_public_url(str(response.url)):
+                raise ValueError("feed redirected to an unsafe url")
+            payload = response.json()
+            rows = payload.get("items", []) if isinstance(payload, dict) else payload
+            if not isinstance(rows, list):
+                raise ValueError("feed payload must be a json array or an object with an items array")
+        except Exception as exc:
+            errors.append(f"{feed_url}: {exc}")
+            continue
+
+        feed_key = hashlib.sha256(feed_url.encode("utf-8")).hexdigest()[:12]
+        active_ids: set[str] = set()
+        for index, raw in enumerate(rows):
+            if not isinstance(raw, dict):
+                errors.append(f"{feed_url} row {index + 1}: item must be an object")
+                continue
+            content_type = str(raw.get("contentType", raw.get("type", "program"))).strip().lower()
+            if content_type not in {"program", "schedule", "event"}:
+                errors.append(f"{feed_url} row {index + 1}: unsupported type {content_type}")
+                continue
+            title = str(raw.get("title", "")).strip()
+            start_at = str(raw.get("startAt", raw.get("startDate", ""))).strip()
+            if not title or not start_at:
+                errors.append(f"{feed_url} row {index + 1}: title and startAt are required")
+                continue
+            source_id = str(raw.get("id", "")).strip()
+            identity = source_id or f"{title}|{start_at}|{raw.get('endAt', raw.get('endDate', ''))}"
+            item_key = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+            content_id = f"schedule-feed-{feed_key}-{item_key}"
+            active_ids.add(content_id)
+            metadata = {
+                "startAt": start_at,
+                "endAt": str(raw.get("endAt", raw.get("endDate", start_at))).strip(),
+                "target": str(raw.get("target", "전체")).strip(),
+                "method": str(raw.get("method", "")).strip(),
+                "category": str(raw.get("category", "행사" if content_type == "event" else "교육")).strip(),
+                "description": str(raw.get("description", "")).strip(),
+                "applicationUrl": str(raw.get("applicationUrl", raw.get("url", ""))).strip(),
+                "applicationDeadline": str(raw.get("applicationDeadline", "")).strip(),
+                "capacity": max(0, int(raw.get("capacity", 0) or 0)),
+                "waitlistAvailable": bool(raw.get("waitlistAvailable", False)),
+                "timezone": str(raw.get("timezone", "Asia/Seoul")).strip() or "Asia/Seoul",
+                "feedUrl": feed_url,
+                "feedItemId": source_id,
+                "feedUpdatedAt": refreshed_at,
+            }
+            item = db.get(Content, content_id) or Content(id=content_id)
+            item.title = title
+            item.content_type = content_type
+            item.source = str(raw.get("source", urlparse(feed_url).netloc)).strip()
+            item.url = str(raw.get("url", raw.get("applicationUrl", ""))).strip()
+            item.difficulty = str(raw.get("difficulty", "중")).strip() or "중"
+            item.required_tier = str(raw.get("requiredTier", "브론즈")).strip() or "브론즈"
+            item.topic = str(raw.get("topic", "해양교육")).strip() or "해양교육"
+            item.career_tag = str(raw.get("careerTag", "")).strip()
+            item.minutes = max(0, int(raw.get("minutes", 0) or 0))
+            item.metadata_json = metadata
+            db.add(item)
+            imported += 1
+
+        existing = list(db.scalars(select(Content).where(Content.content_type.in_({"program", "schedule", "event"}))))
+        for item in existing:
+            metadata = item.metadata_json or {}
+            if metadata.get("feedUrl") == feed_url and item.id not in active_ids:
+                db.delete(item)
+                removed += 1
+    db.commit()
+    return {"imported": imported, "removed": removed, "errors": errors, "refreshedAt": refreshed_at}
+
+
 def search_resources(db: Session, request: AiSearchRequest) -> AiSearchResponse:
     type_map = {"video": {"video"}, "schedule": {"program", "event", "schedule"}, "paper": {"paper"}}
     allowed = type_map[request.resourceType]
@@ -343,8 +431,6 @@ def search_resources(db: Session, request: AiSearchRequest) -> AiSearchResponse:
 
     ranked = sorted(items, key=score, reverse=True)
     selected = [item for item in ranked if score(item) > 0][: request.limit]
-    if not selected:
-        selected = ranked[: min(request.limit, 5)]
 
     live_sources = retrieve_live_web_sources(
         f"{request.query} 해양 {request.resourceType} 공식 자료",
@@ -485,6 +571,13 @@ def content_schema(item: Content) -> AdminContentItem:
         authors=str(metadata.get("authors", "")),
         year=str(metadata.get("year", "")),
         doi=str(metadata.get("doi", "")),
+        applicationUrl=str(metadata.get("applicationUrl", item.url if item.content_type in {"program", "schedule", "event"} else "")),
+        applicationDeadline=str(metadata.get("applicationDeadline", "")),
+        capacity=int(metadata.get("capacity", 0) or 0),
+        waitlistAvailable=bool(metadata.get("waitlistAvailable", False)),
+        timezone=str(metadata.get("timezone", "Asia/Seoul")),
+        paperStatus=str(metadata.get("paperStatus", "current")),
+        versionNote=str(metadata.get("versionNote", "")),
     )
 
 
