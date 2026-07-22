@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BluePath 보호자 동의</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#06223f;color:#fff;margin:0;padding:32px}
+    main{max-width:680px;margin:auto;background:#0b355b;padding:28px;border-radius:18px}
+    button{width:100%;padding:14px;border:0;border-radius:10px;font-weight:700;cursor:pointer}
+    button:disabled{cursor:not-allowed;opacity:.55}
+    p,li{line-height:1.65}.muted{color:#c9ffff}.panel{background:#082a49;padding:16px;border-radius:12px;margin:16px 0}
+    dt{font-weight:700;margin-top:8px}dd{margin:2px 0 8px}.error{color:#ffd0d0}.success{color:#bfffd8}
+  </style>
+</head>
+<body><main>
+  <h1>보호자 동의 확인</h1>
+  <p>아래 요청 정보와 동의 항목을 확인한 뒤 동의해 주세요.</p>
+  <section class="panel" id="details" aria-live="polite">요청 정보를 확인하고 있습니다.</section>
+  <section id="terms" hidden>
+    <h2>동의 항목</h2>
+    <ul id="term-list"></ul>
+    <p class="muted">동의는 선택 사항이지만, 미성년 학습자는 확인 전 인증 학습과 포트폴리오 발급 기능을 이용할 수 없습니다.</p>
+  </section>
+  <button id="confirm" disabled>내용을 확인하고 보호자 동의</button>
+  <p id="result" role="status"></p>
+</main>
+<script>
+const token=new URLSearchParams(location.search).get('token')||'';
+const details=document.getElementById('details');
+const terms=document.getElementById('terms');
+const termList=document.getElementById('term-list');
+const confirmButton=document.getElementById('confirm');
+const result=document.getElementById('result');
+const escapeHtml=value=>String(value).replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+async function loadDetails(){
+ if(!token){details.innerHTML='<p class="error">유효한 토큰이 없습니다.</p>';return;}
+ const response=await fetch('/api/v1/guardian-consent/details?token='+encodeURIComponent(token),{headers:{'Accept':'application/json'}});
+ const body=await response.json().catch(()=>({}));
+ if(!response.ok){details.innerHTML='<p class="error">'+escapeHtml(body.detail||'동의 요청을 확인할 수 없습니다.')+'</p>';return;}
+ const expires=new Date(body.expiresAt).toLocaleString('ko-KR');
+ details.innerHTML='<dl><dt>학습자</dt><dd>'+escapeHtml(body.learnerName)+'</dd><dt>보호자 이메일</dt><dd>'+escapeHtml(body.guardianEmailMasked)+'</dd><dt>동의 문서 버전</dt><dd>'+escapeHtml(body.consentVersion)+'</dd><dt>링크 유효기간</dt><dd>'+escapeHtml(expires)+'</dd><dt>현재 상태</dt><dd>'+escapeHtml(body.status)+'</dd></dl>';
+ termList.replaceChildren(...body.terms.map(text=>{const li=document.createElement('li');li.textContent=text;return li;}));
+ terms.hidden=false;
+ if(body.status==='pending'){confirmButton.disabled=false;}
+ else if(body.status==='confirmed'){result.className='success';result.textContent='이미 보호자 동의가 확인된 요청입니다.';}
+ else{result.className='error';result.textContent=body.status==='expired'?'동의 링크가 만료되었습니다. 학습자에게 새 요청을 보내 달라고 안내해 주세요.':'철회되었거나 사용할 수 없는 동의 요청입니다.';}
+}
+confirmButton.onclick=async()=>{
+ confirmButton.disabled=true;
+ result.className='';result.textContent='동의를 확인하고 있습니다.';
+ const response=await fetch('/api/v1/guardian-consent/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
+ const body=await response.json().catch(()=>({}));
+ if(response.ok){result.className='success';result.textContent='보호자 동의가 확인되었습니다. 이 창을 닫아도 됩니다.';}
+ else{result.className='error';result.textContent=body.detail||'동의 확인에 실패했습니다.';confirmButton.disabled=false;}
+};
+loadDetails();
+</script></body></html>
