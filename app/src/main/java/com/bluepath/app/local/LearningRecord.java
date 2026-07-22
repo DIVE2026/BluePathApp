@@ -2,6 +2,7 @@ package com.bluepath.app.local;
 
 import androidx.room.Entity;
 import androidx.room.Index;
+import androidx.room.Ignore;
 import androidx.room.PrimaryKey;
 
 import java.util.UUID;
@@ -25,6 +26,7 @@ public class LearningRecord {
     public long updatedAt;
     public boolean synced;
 
+    @Ignore
     public LearningRecord(String accountId, String recordType, String targetId, String title,
                           String status, long updatedAt, boolean synced) {
         this(UUID.randomUUID().toString(), accountId, recordType, targetId, title, status, updatedAt, synced);
