@@ -3720,6 +3720,99 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
+    private void showProgramParticipationDialog(ProgramItem item) {
+        if (!store.hasCloudSession() || !cloudRepository.isCloudConfigured()) {
+            toast("로그인과 서버 연결이 필요합니다.");
+            return;
+        }
+
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), 0);
+        form.addView(body(item.title));
+
+        form.addView(label("참여 상태"));
+        Spinner statusSpinner = new Spinner(this);
+        String[] statusLabels = {"신청", "참석", "수료"};
+        String[] statusValues = {"enrolled", "attended", "completed"};
+        ArrayAdapter<String> statusAdapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, statusLabels);
+        statusAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        statusSpinner.setAdapter(statusAdapter);
+        form.addView(statusSpinner, new LinearLayout.LayoutParams(-1, dp(52)));
+
+        form.addView(label("사전 평가 점수 선택 입력"));
+        EditText preAssessment = inputField("0부터 100", "");
+        preAssessment.setInputType(InputType.TYPE_CLASS_NUMBER);
+        form.addView(preAssessment);
+
+        form.addView(label("사후 평가 점수 선택 입력"));
+        EditText postAssessment = inputField("0부터 100", "");
+        postAssessment.setInputType(InputType.TYPE_CLASS_NUMBER);
+        form.addView(postAssessment);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("교육 참여 기록")
+                .setView(form)
+                .setNegativeButton("취소", null)
+                .setPositiveButton("저장", null)
+                .create();
+
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String preText = preAssessment.getText().toString().trim();
+            String postText = postAssessment.getText().toString().trim();
+            Integer preScore = null;
+            Integer postScore = null;
+
+            try {
+                if (!preText.isEmpty()) preScore = Integer.parseInt(preText);
+                if (!postText.isEmpty()) postScore = Integer.parseInt(postText);
+            } catch (NumberFormatException error) {
+                toast("평가 점수는 0부터 100 사이의 정수로 입력해 주세요.");
+                return;
+            }
+
+            if (preScore != null && (preScore < 0 || preScore > 100)) {
+                preAssessment.setError("0부터 100 사이로 입력해 주세요.");
+                return;
+            }
+            if (postScore != null && (postScore < 0 || postScore > 100)) {
+                postAssessment.setError("0부터 100 사이로 입력해 주세요.");
+                return;
+            }
+
+            int selectedPosition = statusSpinner.getSelectedItemPosition();
+            if (selectedPosition < 0 || selectedPosition >= statusValues.length) selectedPosition = 0;
+            String selectedStatus = statusValues[selectedPosition];
+            Integer finalPreScore = preScore;
+            Integer finalPostScore = postScore;
+
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+            executor.execute(() -> {
+                try {
+                    ApiModels.ProgramParticipationResponse result = cloudRepository.saveProgramParticipation(
+                            item.id, item.title, selectedStatus, finalPreScore, finalPostScore);
+                    runOnUiThread(() -> {
+                        viewModel.recordLearning(
+                                "program_participation", item.id, item.title, "server_" + result.status);
+                        dialog.dismiss();
+                        String savedStatus;
+                        if ("completed".equals(result.status)) savedStatus = "수료";
+                        else if ("attended".equals(result.status)) savedStatus = "참석";
+                        else savedStatus = "신청";
+                        toast("교육 참여 상태를 " + savedStatus + "으로 저장했습니다.");
+                    });
+                } catch (Exception error) {
+                    runOnUiThread(() -> {
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                        toast("교육 참여 기록 실패: " + safeMessage(error));
+                    });
+                }
+            });
+        }));
+        dialog.show();
+    }
+
     private void addProgramCard(ProgramItem item) {
         UserProfile p = store.getProfile();
         int score = RecommendationEngine.scoreProgram(item, p, store);
