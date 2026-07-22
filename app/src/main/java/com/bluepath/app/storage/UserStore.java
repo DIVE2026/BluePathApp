@@ -19,6 +19,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -77,7 +78,13 @@ public class UserStore {
                 else if (value instanceof Long) targetEditor.putLong(entry.getKey(), (Long) value);
                 else if (value instanceof Boolean) targetEditor.putBoolean(entry.getKey(), (Boolean) value);
                 else if (value instanceof Float) targetEditor.putFloat(entry.getKey(), (Float) value);
-                else if (value instanceof Set) targetEditor.putStringSet(entry.getKey(), new HashSet<>((Set<String>) value));
+                else if (value instanceof Set) {
+                    Set<String> strings = new HashSet<>();
+                    for (Object item : (Set<?>) value) {
+                        if (item instanceof String) strings.add((String) item);
+                    }
+                    targetEditor.putStringSet(entry.getKey(), strings);
+                }
             }
             targetEditor.apply();
             globalPrefs.edit().putBoolean(migratedKey, true).putString("pendingLegacyRecordScope", scope).apply();
@@ -120,10 +127,12 @@ public class UserStore {
                 .apply();
     }
 
+    @SuppressWarnings("unused")
     public void addXp(int amount) {
         prefs.edit().putInt("xp", Math.max(0, prefs.getInt("xp", 0) + amount)).apply();
     }
 
+    @SuppressWarnings("unused")
     public void setXp(int xp) {
         prefs.edit().putInt("xp", Math.max(0, xp)).apply();
     }
@@ -136,6 +145,7 @@ public class UserStore {
         return tier;
     }
 
+    @SuppressWarnings("unused")
     public String getXpTier() {
         return tierForXp(prefs.getInt("xp", 0));
     }
@@ -144,6 +154,7 @@ public class UserStore {
         return PromotionRules.tierForRank(prefs.getInt("quizTierRank", 1));
     }
 
+    @SuppressWarnings("unused")
     public void promoteByQuiz(String fromTier) {
         if ("플래티넘".equals(fromTier)) {
             prefs.edit().putBoolean("diamondAdvancedQuizPassed", true).apply();
@@ -163,23 +174,23 @@ public class UserStore {
     }
 
     public static int nextTierXp(String tier) {
-        switch (tier) {
-            case "브론즈": return 700;
-            case "실버": return 1600;
-            case "골드": return 2800;
-            case "플래티넘": return 4200;
-            default: return 4200;
-        }
+        return switch (tier) {
+            case "브론즈" -> 700;
+            case "실버" -> 1600;
+            case "골드" -> 2800;
+            case "플래티넘" -> 4200;
+            default -> 4200;
+        };
     }
 
     public static int tierBaseXp(String tier) {
-        switch (tier) {
-            case "실버": return 700;
-            case "골드": return 1600;
-            case "플래티넘": return 2800;
-            case "다이아": return 4200;
-            default: return 0;
-        }
+        return switch (tier) {
+            case "실버" -> 700;
+            case "골드" -> 1600;
+            case "플래티넘" -> 2800;
+            case "다이아" -> 4200;
+            default -> 0;
+        };
     }
 
     public Set<String> getCompletedContentIds() {
@@ -247,9 +258,13 @@ public class UserStore {
         JSONArray encoded = new JSONArray();
         for (ApiModels.VideoInterval interval : merged) {
             JSONArray pair = new JSONArray();
-            pair.put(interval.start);
-            pair.put(interval.end);
-            encoded.put(pair);
+            try {
+                pair.put(interval.start);
+                pair.put(interval.end);
+                encoded.put(pair);
+            } catch (JSONException ignored) {
+                // Values are finite and clamped above. Skip a malformed interval defensively.
+            }
         }
         prefs.edit().putString("videoIntervals_" + contentId, encoded.toString())
                 .putInt("videoDuration_" + contentId, durationSeconds).apply();
