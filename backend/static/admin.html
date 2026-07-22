@@ -92,7 +92,7 @@
     <h2>Video, program, and event management</h2>
     <div class="grid">
       <input id="contentId" placeholder="Unique ID" />
-      <select id="contentType"><option value="video">Video</option><option value="program">Education program</option><option value="event">Event / experience</option><option value="schedule">Schedule</option></select>
+      <select id="contentType"><option value="video">Video</option><option value="program">Education program</option><option value="event">Event / experience</option><option value="schedule">Schedule</option><option value="paper">Research paper</option></select>
       <input id="contentTitle" placeholder="Title" />
       <input id="contentSource" placeholder="Organization / source" />
       <input id="contentUrl" placeholder="URL" />
@@ -106,6 +106,16 @@
       <input id="contentTarget" placeholder="Target audience" value="전체" />
       <input id="contentMethod" placeholder="Participation method" />
       <input id="contentCategory" placeholder="Event category" />
+      <input id="contentApplicationUrl" placeholder="Official application URL" />
+      <input id="contentApplicationDeadline" placeholder="Application deadline ISO" />
+      <input id="contentCapacity" type="number" min="0" placeholder="Capacity" />
+      <select id="contentWaitlist"><option value="false">No waitlist</option><option value="true">Waitlist available</option></select>
+      <input id="contentTimezone" placeholder="Timezone" value="Asia/Seoul" />
+      <input id="contentAuthors" placeholder="Paper authors" />
+      <input id="contentYear" placeholder="Publication year" />
+      <input id="contentDoi" placeholder="DOI" />
+      <select id="contentPaperStatus"><option value="current">Current</option><option value="corrected">Corrected</option><option value="retracted">Retracted</option></select>
+      <input id="contentVersionNote" placeholder="Correction or retraction note" />
     </div>
     <textarea id="contentDescription" rows="3" placeholder="Learner-facing description"></textarea>
     <div class="actions"><button onclick="saveContent()">Save item</button><button class="secondary" onclick="loadContent()">Refresh list</button></div>
@@ -168,9 +178,20 @@
       <div>
         <p>Create missing embeddings after adding or updating institutional knowledge.</p>
         <button onclick="embedKnowledge()">Build RAG embeddings</button>
+        <p>Refresh programs and events from the official JSON feeds configured in SCHEDULE_FEED_URLS.</p>
+        <button class="secondary" onclick="syncSchedules()">Sync official schedule feeds</button>
       </div>
     </div>
     <pre id="automationOutput"></pre>
+  </section>
+
+
+  <section>
+    <h2>Community moderation</h2>
+    <p>Review reports, remove violating content, deactivate non-admin accounts, or dismiss reports with an audit note.</p>
+    <button class="secondary" onclick="loadReports()">Refresh pending reports</button>
+    <pre id="reportOutput">Sign in to review reports.</pre>
+    <div id="reportList"></div>
   </section>
 
   <section>
@@ -198,7 +219,7 @@
       const data = await request('/api/v1/auth/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:email.value,password:password.value,guardianEmail:null})});
       token = data.accessToken; localStorage.setItem('bluepathAdminToken', token);
       show('authOutput', `Signed in as ${data.displayName} (${data.email})`);
-      await Promise.all([loadContent(), loadQuizzes(), loadEvidence(), loadDemandRadar(), loadOutcomes()]);
+      await Promise.all([loadContent(), loadQuizzes(), loadEvidence(), loadDemandRadar(), loadOutcomes(), loadReports()]);
     } catch (error) { show('authOutput', error.message); }
   }
 
@@ -283,7 +304,7 @@
   }
 
   async function saveContent() {
-    const payload = {id:contentId.value.trim(),contentType:contentType.value,title:contentTitle.value.trim(),source:contentSource.value.trim(),url:contentUrl.value.trim(),difficulty:contentDifficulty.value,requiredTier:contentTier.value,topic:contentTopic.value.trim(),careerTag:contentCareer.value.trim(),minutes:Number(contentMinutes.value||0),startAt:contentStart.value.trim(),endAt:contentEnd.value.trim(),target:contentTarget.value.trim()||'전체',method:contentMethod.value.trim(),category:contentCategory.value.trim(),description:contentDescription.value.trim()};
+    const payload = {id:contentId.value.trim(),contentType:contentType.value,title:contentTitle.value.trim(),source:contentSource.value.trim(),url:contentUrl.value.trim(),difficulty:contentDifficulty.value,requiredTier:contentTier.value,topic:contentTopic.value.trim(),careerTag:contentCareer.value.trim(),minutes:Number(contentMinutes.value||0),startAt:contentStart.value.trim(),endAt:contentEnd.value.trim(),target:contentTarget.value.trim()||'전체',method:contentMethod.value.trim(),category:contentCategory.value.trim(),description:contentDescription.value.trim(),applicationUrl:contentApplicationUrl.value.trim(),applicationDeadline:contentApplicationDeadline.value.trim(),capacity:Number(contentCapacity.value||0),waitlistAvailable:contentWaitlist.value==='true',timezone:contentTimezone.value.trim()||'Asia/Seoul',authors:contentAuthors.value.trim(),year:contentYear.value.trim(),doi:contentDoi.value.trim(),paperStatus:contentPaperStatus.value,versionNote:contentVersionNote.value.trim()};
     try { show('contentOutput', await request('/api/v1/admin/content',{method:'POST',headers:jsonHeaders(),body:JSON.stringify(payload)})); await loadContent(); }
     catch (error) { show('contentOutput', error.message); }
   }
@@ -299,7 +320,7 @@
   function deleteContentEncoded(value) { deleteContent(decodeURIComponent(value)); }
 
   function editContent(item) {
-    contentId.value=item.id; contentType.value=item.contentType; contentTitle.value=item.title; contentSource.value=item.source; contentUrl.value=item.url; contentDifficulty.value=item.difficulty||'중'; contentTier.value=item.requiredTier; contentTopic.value=item.topic; contentCareer.value=item.careerTag; contentMinutes.value=item.minutes; contentStart.value=item.startAt||''; contentEnd.value=item.endAt||''; contentTarget.value=item.target||'전체'; contentMethod.value=item.method||''; contentCategory.value=item.category||''; contentDescription.value=item.description||'';
+    contentId.value=item.id; contentType.value=item.contentType; contentTitle.value=item.title; contentSource.value=item.source; contentUrl.value=item.url; contentDifficulty.value=item.difficulty||'중'; contentTier.value=item.requiredTier; contentTopic.value=item.topic; contentCareer.value=item.careerTag; contentMinutes.value=item.minutes; contentStart.value=item.startAt||''; contentEnd.value=item.endAt||''; contentTarget.value=item.target||'전체'; contentMethod.value=item.method||''; contentCategory.value=item.category||''; contentDescription.value=item.description||''; contentApplicationUrl.value=item.applicationUrl||''; contentApplicationDeadline.value=item.applicationDeadline||''; contentCapacity.value=item.capacity||0; contentWaitlist.value=String(Boolean(item.waitlistAvailable)); contentTimezone.value=item.timezone||'Asia/Seoul'; contentAuthors.value=item.authors||''; contentYear.value=item.year||''; contentDoi.value=item.doi||''; contentPaperStatus.value=item.paperStatus||'current'; contentVersionNote.value=item.versionNote||'';
     window.scrollTo({top: document.querySelector('#contentId').getBoundingClientRect().top + window.scrollY - 80, behavior:'smooth'});
   }
 
@@ -363,9 +384,31 @@
     catch (error) { show('automationOutput', error.message); }
   }
 
+  async function syncSchedules() {
+    try { show('automationOutput', await request('/api/v1/admin/schedules/sync',{method:'POST',headers:authHeaders()})); await loadContent(); }
+    catch (error) { show('automationOutput', error.message); }
+  }
+
   async function embedKnowledge() {
     try { show('automationOutput', await request('/api/v1/admin/rag/embed',{method:'POST',headers:authHeaders()})); }
     catch (error) { show('automationOutput', error.message); }
+  }
+
+  async function loadReports() {
+    try {
+      const data = await request('/api/v1/admin/community/reports?status=pending',{headers:authHeaders()});
+      reportOutput.textContent = `${data.length} pending report(s)`;
+      reportList.innerHTML = data.map(item => `<div class="row"><span class="pill">${escapeHtml(item.targetType)}</span><strong>${escapeHtml(item.reason)}</strong><p>target ${escapeHtml(item.targetId)} · reporter ${escapeHtml(item.reporterId)}</p><div class="actions"><button class="danger" onclick="reviewReport('${item.id}','delete','resolved')">Delete content</button><button class="danger" onclick="reviewReport('${item.id}','deactivate','resolved')">Deactivate user</button><button class="secondary" onclick="reviewReport('${item.id}','none','dismissed')">Dismiss</button></div></div>`).join('') || '<div class="row">No pending reports.</div>';
+    } catch (error) { show('reportOutput', error.message); }
+  }
+
+  async function reviewReport(id, action, status) {
+    const reviewNote=prompt('Audit note is required')||'';
+    if (!reviewNote.trim()) return alert('Enter an audit note.');
+    try {
+      await request(`/api/v1/admin/community/reports/${encodeURIComponent(id)}/review`,{method:'POST',headers:jsonHeaders(),body:JSON.stringify({action,status,reviewNote})});
+      await loadReports();
+    } catch (error) { show('reportOutput', error.message); }
   }
 
   async function loadEvidence() {
