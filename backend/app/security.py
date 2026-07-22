@@ -78,7 +78,14 @@ def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
     return user
 
 
+ADMIN_ROLES = {"institution_admin", "super_admin"}
+
+
+def is_admin(user: User) -> bool:
+    return user.role in ADMIN_ROLES
+
+
 def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role not in {"institution_admin", "super_admin"}:
+    if not is_admin(user):
         raise HTTPException(status_code=403, detail="Administrator permission required")
     return user
