@@ -663,12 +663,15 @@ def generate_family_mission(db: Session, user: User, request: MissionGenerateReq
     exhibit_title = request.exhibitTitle.strip() or qr_record.exhibit_title or request.exhibitCode
     title = f"{exhibit_title} 가족 협동 미션"
     story = "가족 탐사대가 전시 속 단서를 찾아 심해 탐사선의 안전한 귀환 계획을 완성합니다."
-    roles = [
+    role_templates = [
         MissionRole(name="탐험가", audience="어린이·입문자", task="전시에서 압력이나 부력과 관련된 단서 한 가지를 찾아 설명합니다."),
         MissionRole(name="항해사", audience="보호자·동행자", task="안전 장치 두 가지를 찾아 왜 필요한지 이야기합니다."),
+        MissionRole(name="기록관", audience="가족 구성원", task="발견한 단서를 짧은 문장이나 그림으로 기록합니다."),
+        MissionRole(name="안전관", audience="가족 구성원", task="관람 동선과 미션 안전 수칙을 확인합니다."),
+        MissionRole(name="설계자", audience="가족 구성원", task="발견한 단서를 잠수정 설계에 반영합니다."),
+        MissionRole(name="발표자", audience="가족 구성원", task="가족의 결론과 비상대응 절차를 한 문장으로 발표합니다."),
     ]
-    if request.participantCount >= 3:
-        roles.append(MissionRole(name="기록관", audience="가족 구성원", task="발견한 단서를 사진 대신 짧은 문장이나 그림으로 기록합니다."))
+    roles = role_templates[: request.participantCount]
     joint_task = "발견한 단서를 바탕으로 우리 가족만의 심해 잠수정과 비상대응 절차를 설계하세요."
     gains = {"선박": 5, "해양안전": 4, interest: 3}
     badge = "가족 심해 탐사대"
@@ -691,7 +694,9 @@ def generate_family_mission(db: Session, user: User, request: MissionGenerateReq
             payload = _clean_json(call_chat(prompt, temperature=0.45, max_tokens=1100))
             parsed_roles = [MissionRole(**item) for item in payload.get("roles", []) if isinstance(item, dict)]
             if parsed_roles:
-                roles = parsed_roles[: max(2, request.participantCount)]
+                roles = parsed_roles[: request.participantCount]
+                while len(roles) < request.participantCount:
+                    roles.append(role_templates[len(roles)])
             parsed_gains = {str(k): _clamp(v, 1, 12) for k, v in payload.get("expectedSkillGains", {}).items() if isinstance(v, (int, float))}
             if parsed_gains:
                 gains = parsed_gains
@@ -757,6 +762,10 @@ def verify_family_mission(
             nextRecommendation=next_recommendation,
         )
 
+    if participant_count != evidence.participants:
+        raise ValueError("Participant count must match the generated mission")
+    if len(mission.get("roles", [])) != evidence.participants:
+        raise ValueError("Mission roles do not match the participant count")
     note = completion_note.strip()
     if len(note) < 10:
         raise ValueError("Completion note must contain at least 10 non-space characters")
