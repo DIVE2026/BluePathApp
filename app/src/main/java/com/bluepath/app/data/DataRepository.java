@@ -10,6 +10,8 @@ import com.bluepath.app.model.PaperItem;
 import com.bluepath.app.model.ProgramItem;
 import com.bluepath.app.model.QuizQuestion;
 import com.bluepath.app.network.ApiModels;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -17,11 +19,15 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.lang.reflect.Type;
 
 public final class DataRepository {
     private static Context appContext;
@@ -33,11 +39,17 @@ public final class DataRepository {
     private static List<InstitutionItem> institutionCache;
     private static List<String> surveyInsightCache;
     private static int surveySampleSize;
+    private static boolean persistedCatalogLoaded;
+    private static final String REMOTE_CATALOG_FILE = "bluepath-remote-catalog.json";
 
     private DataRepository() {}
 
-    public static void initialize(Context context) {
+    public static synchronized void initialize(Context context) {
         appContext = context.getApplicationContext();
+        if (!persistedCatalogLoaded) {
+            persistedCatalogLoaded = true;
+            loadPersistedRemoteCatalog();
+        }
     }
 
     public static List<ContentItem> contents() {
@@ -85,7 +97,8 @@ public final class DataRepository {
                 list.add(new PaperItem(
                         item.getString("id"), item.optString("title", ""), item.optString("authors", ""),
                         item.optString("year", ""), item.optString("source", ""), item.optString("url", ""),
-                        item.optString("topic", "해양교육"), item.optString("abstract", ""), item.optString("doi", "")
+                        item.optString("topic", "해양교육"), item.optString("abstract", ""), item.optString("doi", ""),
+                        item.optString("paperStatus", "current"), item.optString("versionNote", "")
                 ));
             }
         } catch (Exception ignored) {
@@ -153,7 +166,9 @@ public final class DataRepository {
                         item.optString("startDate", ""), item.optString("endDate", ""),
                         item.optString("method", "오프라인"), item.optString("topic", "해양교육"),
                         item.optString("description", ""), item.optString("source", "제공 데이터"),
-                        item.optString("applicationUrl", item.optString("url", ""))
+                        item.optString("applicationUrl", item.optString("url", "")),
+                        item.optString("applicationDeadline", ""), item.optInt("capacity", 0),
+                        item.optBoolean("waitlistAvailable", false), item.optString("timezone", "Asia/Seoul")
                 ));
             }
         } catch (Exception ignored) {
@@ -178,7 +193,9 @@ public final class DataRepository {
                         item.getString("id"), item.getString("title"), item.optString("startDate", ""),
                         item.optString("endDate", ""), item.optString("target", "전체"),
                         item.optString("category", "행사"), item.optString("description", ""),
-                        item.optString("source", "제공 데이터"), item.optString("applicationUrl", item.optString("url", ""))
+                        item.optString("source", "제공 데이터"), item.optString("applicationUrl", item.optString("url", "")),
+                        item.optString("applicationDeadline", ""), item.optInt("capacity", 0),
+                        item.optBoolean("waitlistAvailable", false), item.optString("timezone", "Asia/Seoul")
                 ));
             }
         } catch (Exception ignored) {
@@ -243,29 +260,87 @@ public final class DataRepository {
     }
 
     public static synchronized void applyRemoteCatalog(List<ApiModels.ContentDto> remote) {
+        applyRemoteCatalogInternal(remote, true);
+    }
+
+    private static synchronized void applyRemoteCatalogInternal(List<ApiModels.ContentDto> remote, boolean persist) {
         if (remote == null) return;
         if (contentCache == null) contentCache = loadContents();
         if (programCache == null) programCache = loadPrograms();
         if (eventCache == null) eventCache = loadEvents();
         if (paperCache == null) paperCache = loadPapers();
+
+        List<ContentItem> videos = new ArrayList<>();
+        List<ProgramItem> programs = new ArrayList<>();
+        List<EventItem> events = new ArrayList<>();
+        List<PaperItem> papers = new ArrayList<>();
+        boolean hasVideos = false;
+        boolean hasPrograms = false;
+        boolean hasEvents = false;
+        boolean hasPapers = false;
+
         for (ApiModels.ContentDto item : remote) {
             if (item == null || item.id == null || item.id.trim().isEmpty()) continue;
             if ("video".equals(item.contentType)) {
-                replaceContent(new ContentItem(item.id, safe(item.title), safe(item.source), safe(item.url),
+                hasVideos = true;
+                videos.add(new ContentItem(item.id, safe(item.title), safe(item.source), safe(item.url),
                         safeOr(item.difficulty, "중"), safeOr(item.requiredTier, "브론즈"),
                         safeOr(item.topic, "해양교육"), safe(item.careerTag), item.minutes));
             } else if ("program".equals(item.contentType) || "schedule".equals(item.contentType)) {
-                replaceProgram(new ProgramItem(item.id, safe(item.title), safeOr(item.target, "전체"),
+                hasPrograms = true;
+                programs.add(new ProgramItem(item.id, safe(item.title), safeOr(item.target, "전체"),
                         safe(item.startAt), safe(item.endAt), safeOr(item.method, "오프라인"),
-                        safeOr(item.topic, "해양교육"), safe(item.description), safe(item.source), safe(item.url)));
+                        safeOr(item.topic, "해양교육"), safe(item.description), safe(item.source),
+                        safeOr(item.applicationUrl, safe(item.url)), safe(item.applicationDeadline), item.capacity,
+                        item.waitlistAvailable, safeOr(item.timezone, "Asia/Seoul")));
             } else if ("event".equals(item.contentType)) {
-                replaceEvent(new EventItem(item.id, safe(item.title), safe(item.startAt), safe(item.endAt),
-                        safeOr(item.target, "전체"), safeOr(item.category, "행사"), safe(item.description), safe(item.source), safe(item.url)));
+                hasEvents = true;
+                events.add(new EventItem(item.id, safe(item.title), safe(item.startAt), safe(item.endAt),
+                        safeOr(item.target, "전체"), safeOr(item.category, "행사"), safe(item.description), safe(item.source),
+                        safeOr(item.applicationUrl, safe(item.url)), safe(item.applicationDeadline), item.capacity,
+                        item.waitlistAvailable, safeOr(item.timezone, "Asia/Seoul")));
             } else if ("paper".equals(item.contentType)) {
-                replacePaper(new PaperItem(item.id, safe(item.title), safe(item.authors), safe(item.year),
-                        safe(item.source), safe(item.url), safeOr(item.topic, "해양교육"), safe(item.description), safe(item.doi)));
+                hasPapers = true;
+                papers.add(new PaperItem(item.id, safe(item.title), safe(item.authors), safe(item.year),
+                        safe(item.source), safe(item.url), safeOr(item.topic, "해양교육"), safe(item.description), safe(item.doi),
+                        safeOr(item.paperStatus, "current"), safe(item.versionNote)));
             }
         }
+        // The server catalog is authoritative for each content type it includes. Replacing that
+        // slice removes deleted or expired records instead of retaining stale local copies forever.
+        if (hasVideos) contentCache = videos;
+        if (hasPrograms) programCache = programs;
+        if (hasEvents) eventCache = events;
+        if (hasPapers) paperCache = papers;
+        if (persist) persistRemoteCatalog(remote);
+    }
+
+    private static void persistRemoteCatalog(List<ApiModels.ContentDto> remote) {
+        if (appContext == null) return;
+        File target = new File(appContext.getFilesDir(), REMOTE_CATALOG_FILE);
+        try (FileWriter writer = new FileWriter(target, false)) {
+            new Gson().toJson(remote, writer);
+            appContext.getSharedPreferences("bluepath_catalog", Context.MODE_PRIVATE).edit()
+                    .putLong("updatedAt", System.currentTimeMillis()).apply();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void loadPersistedRemoteCatalog() {
+        if (appContext == null) return;
+        File target = new File(appContext.getFilesDir(), REMOTE_CATALOG_FILE);
+        if (!target.isFile()) return;
+        Type type = new TypeToken<List<ApiModels.ContentDto>>() {}.getType();
+        try (FileReader reader = new FileReader(target)) {
+            List<ApiModels.ContentDto> items = new Gson().fromJson(reader, type);
+            applyRemoteCatalogInternal(items, false);
+        } catch (Exception ignored) {
+        }
+    }
+
+    public static long remoteCatalogUpdatedAt() {
+        if (appContext == null) return 0L;
+        return appContext.getSharedPreferences("bluepath_catalog", Context.MODE_PRIVATE).getLong("updatedAt", 0L);
     }
 
     private static void replaceContent(ContentItem value) {
