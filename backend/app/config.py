@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     require_web_search: bool = False
 
     qr_signing_secret: str = "change-me-before-production"
-    qr_token_minutes: int = 10
+    qr_token_minutes: int = 20
 
     web_search_provider: str = ""
     web_search_api_key: str = ""
@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     youtube_sync_hours: int = 0
     youtube_sync_queries: str = "해양 교육,해양 환경 교육,스마트 항만,자율운항선박"
     youtube_sync_max_results: int = 10
+
+    schedule_feed_urls: str = ""
+    schedule_sync_hours: int = 0
+    schedule_feed_timeout_seconds: int = 20
+
     admin_email: str = ""
     admin_password: str = ""
 
@@ -94,6 +99,10 @@ class Settings(BaseSettings):
     @property
     def youtube_query_list(self) -> list[str]:
         return [value.strip() for value in self.youtube_sync_queries.split(",") if value.strip()]
+
+    @property
+    def schedule_feed_list(self) -> list[str]:
+        return [value.strip() for value in self.schedule_feed_urls.split(",") if value.strip()]
 
 
 @lru_cache
