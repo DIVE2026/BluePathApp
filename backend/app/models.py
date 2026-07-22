@@ -43,6 +43,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(40), default="learner", index=True)
     guardian_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     guardian_consent: Mapped[bool] = mapped_column(Boolean, default=False)
+    guardian_consent_version: Mapped[str] = mapped_column(String(40), default="")
+    guardian_consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
@@ -65,6 +67,7 @@ class UserProfile(Base):
 
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    version: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
     user: Mapped[User] = relationship(back_populates="profile")
@@ -77,12 +80,78 @@ class LearningRecord(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     client_record_id: Mapped[str] = mapped_column(String(80))
+    device_id: Mapped[str] = mapped_column(String(80), default="")
     record_type: Mapped[str] = mapped_column(String(40), index=True)
     target_id: Mapped[str] = mapped_column(String(160), index=True)
     title: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(80), default="")
     client_updated_at: Mapped[int] = mapped_column(BigInteger, default=0)
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class UserProgress(Base):
+    __tablename__ = "user_progress"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    xp: Mapped[int] = mapped_column(Integer, default=0)
+    quiz_tier_rank: Mapped[int] = mapped_column(Integer, default=1)
+    diamond_advanced_quiz_passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    skill_mastery_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    skill_evidence_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class QuizSession(Base):
+    __tablename__ = "quiz_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    tier: Mapped[str] = mapped_column(String(40), index=True)
+    source: Mapped[str] = mapped_column(String(80), default="server")
+    questions_json: Mapped[list] = mapped_column(JSON, default=list)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+
+
+class VideoLearningEvidence(Base):
+    __tablename__ = "video_learning_evidence"
+    __table_args__ = (UniqueConstraint("user_id", "content_id", name="uq_video_evidence_user_content"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    content_id: Mapped[str] = mapped_column(String(160), index=True)
+    duration_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    watched_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    coverage_percent: Mapped[int] = mapped_column(Integer, default=0)
+    intervals_json: Mapped[list] = mapped_column(JSON, default=list)
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class GuardianConsentRequest(Base):
+    __tablename__ = "guardian_consent_requests"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    guardian_email: Mapped[str] = mapped_column(String(320), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    consent_version: Mapped[str] = mapped_column(String(40), default="2026-07")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class PortfolioCredential(Base):
+    __tablename__ = "portfolio_credentials"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    signature: Mapped[str] = mapped_column(String(128))
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
 
 class Content(Base):
@@ -208,6 +277,18 @@ class RouteNode(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     plan: Mapped[RoutePlan] = relationship(back_populates="nodes")
+
+
+class PaperLearningEvidence(Base):
+    __tablename__ = "paper_learning_evidence"
+    __table_args__ = (UniqueConstraint("user_id", "content_id", name="uq_paper_evidence_user_content"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    content_id: Mapped[str] = mapped_column(String(160), index=True)
+    reflection: Mapped[str] = mapped_column(Text)
+    paper_status: Mapped[str] = mapped_column(String(30), default="current")
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
 
 
 class MissionEvidence(Base):
