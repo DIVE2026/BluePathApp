@@ -13,10 +13,14 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.os.LocaleList;
 import android.os.SystemClock;
 import android.provider.CalendarContract;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.inputmethod.EditorInfo;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -85,6 +89,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 public class MainActivity extends AppCompatActivity {
     private static final String WAVE_MARK = "∿";
@@ -127,10 +132,10 @@ public class MainActivity extends AppCompatActivity {
     private boolean communityHasMore = true;
     private static final int COMMUNITY_PAGE_SIZE = 20;
     private List<ApiModels.CommunityPostDto> communityPosts = new ArrayList<>();
-    private boolean learningSearchLoading = false;
-    private boolean scheduleSearchLoading = false;
-    private ApiModels.AiSearchResponse learningSearchResponse;
-    private ApiModels.AiSearchResponse scheduleSearchResponse;
+    private final List<AiSearchTurn> learningSearchConversation = new ArrayList<>();
+    private final List<AiSearchTurn> scheduleSearchConversation = new ArrayList<>();
+    private String learningSearchDraft = "";
+    private String scheduleSearchDraft = "";
     private final Set<String> scheduleSelectedTags = new LinkedHashSet<>();
     private String scheduleStatusFilter = "전체";
     private String scheduleSelectedDate = "";
@@ -154,8 +159,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean quizServerAuthoritative = false;
     private boolean quizSubmitting = false;
 
-    private boolean agentLoading = false;
-    private String agentLastAnswer = "질문을 입력하면 BluePath AI가 상세한 답변을 제공합니다. 온라인 정보를 활용한 답변에는 참고한 근거 자료도 함께 표시됩니다.";
+    private final List<AgentTurn> agentConversation = new ArrayList<>();
+    private String agentDraft = "";
+    private View conversationScrollAnchor;
 
     private boolean routeLoading = false;
     private boolean routeAttempted = false;
@@ -168,6 +174,30 @@ public class MainActivity extends AppCompatActivity {
     private ApiModels.MissionQrPayload currentQrPayload;
     private int missionParticipantCount = 2;
     private boolean guardianDialogVisible = false;
+
+    private static final class AgentTurn {
+        final String question;
+        String answer = "";
+        String error = "";
+        boolean loading = true;
+
+        AgentTurn(String question) {
+            this.question = question;
+        }
+    }
+
+    private static final class AiSearchTurn {
+        final String resourceType;
+        final String query;
+        ApiModels.AiSearchResponse response;
+        String error = "";
+        boolean loading = true;
+
+        AiSearchTurn(String resourceType, String query) {
+            this.resourceType = resourceType;
+            this.query = query;
+        }
+    }
 
     /**
      * 커뮤니티 화면 전용 당겨서 새로고침 스크롤뷰입니다.
@@ -708,6 +738,7 @@ public class MainActivity extends AppCompatActivity {
         cancelQuizTimer();
         quizTimerText = null;
         currentTab = tab;
+        conversationScrollAnchor = null;
         applyAppWindow();
         appRoot = new FrameLayout(this);
         appRoot.setBackgroundResource(R.drawable.bg_app_surface);
@@ -1815,7 +1846,8 @@ public class MainActivity extends AppCompatActivity {
                         + "영상 탭에서는 입문·진로 탐색·직무 심화 난도별 라이브러리를 확인할 수 있습니다. 각 카드에서 권장 티어, 적합도, 출처, 소요 시간, 분야, 연결 진로와 추천 이유를 살펴보고, "
                         + "영상을 시작하거나 이어서 시청하고 찜 목록에 저장할 수 있습니다. 시청 후에는 핵심 내용을 제출해 학습 완료를 인증하고 XP와 역량 기록에 반영할 수 있습니다. 논문 탭에서는 저자·연도·학술지·DOI·초록을 확인하고 원문을 읽은 뒤 요약을 학습 증거로 저장할 수 있습니다."
         );
-        addAiSearchBox(learningSubTab, "예: 해양환경 입문자가 20분 안에 볼 만한 영상이나 논문 찾아줘", learningSearchLoading, learningSearchResponse);
+        addAiSearchBox(learningSubTab, "예: 해양환경 입문자가 20분 안에 볼 만한 영상이나 논문 찾아줘", learningSearchConversation);
+        renderAiSearchConversation(learningSubTab, learningSearchConversation);
 
         LinearLayout tabs = row();
         Button videoTab = learningSubTab.equals("video") ? primaryButton("영상") : outlineButton("영상");
@@ -1829,22 +1861,6 @@ public class MainActivity extends AppCompatActivity {
         tabRight.setMargins(dp(5), 0, 0, 0);
         tabs.addView(paperTab, tabRight);
         content.addView(tabs);
-
-        if (learningSearchResponse != null && learningSearchResponse.items != null && !learningSearchResponse.items.isEmpty()) {
-            content.addView(sectionTitle("AI 검색 결과"));
-            content.addView(body(learningSearchResponse.summary));
-            int shown = 0;
-            for (ApiModels.ContentDto dto : learningSearchResponse.items) {
-                if ("paper".equals(learningSubTab) && "paper".equals(dto.contentType)) {
-                    addPaperCard(paperFromDto(dto));
-                    shown++;
-                } else if ("video".equals(learningSubTab) && "video".equals(dto.contentType)) {
-                    addContentCard(contentFromDto(dto), false);
-                    shown++;
-                }
-            }
-            if (shown == 0) content.addView(note("현재 하위 탭과 일치하는 검색 결과가 없습니다.", MUTED));
-        }
 
         if ("paper".equals(learningSubTab)) {
             content.addView(sectionTitle("해양 논문 · 연구 자료"));
@@ -2264,24 +2280,8 @@ public class MainActivity extends AppCompatActivity {
         );
 
         content.addView(sectionTitle("AI로 활동 찾기"));
-        addAiSearchBox("schedule", "예: 부산에서 고등학생이 여름방학에 참여할 해양 안전 교육이 있을까?", scheduleSearchLoading, scheduleSearchResponse);
-
-        if (scheduleSearchResponse != null && scheduleSearchResponse.items != null && !scheduleSearchResponse.items.isEmpty()) {
-            content.addView(body(scheduleSearchResponse.summary));
-            for (ApiModels.ContentDto dto : scheduleSearchResponse.items) {
-                if ("event".equals(dto.contentType)) addEventCard(eventFromDto(dto));
-                else addProgramCard(programFromDto(dto));
-            }
-            content.addView(note("AI 검색 결과는 위 영역에만 표시되며, 아래 일정 둘러보기에는 영향을 주지 않습니다.", MUTED));
-            Button closeResults = outlineButton("AI 검색 결과 닫기");
-            closeResults.setOnClickListener(v -> {
-                scheduleSearchResponse = null;
-                showApp(3);
-            });
-            LinearLayout.LayoutParams closeParams = new LinearLayout.LayoutParams(-1, dp(44));
-            closeParams.setMargins(0, 0, 0, dp(12));
-            content.addView(closeResults, closeParams);
-        }
+        addAiSearchBox("schedule", "예: 부산에서 고등학생이 여름방학에 참여할 해양 안전 교육이 있을까?", scheduleSearchConversation);
+        renderAiSearchConversation("schedule", scheduleSearchConversation);
 
         content.addView(sectionTitle("일정 둘러보기"));
         long catalogUpdatedAt = DataRepository.remoteCatalogUpdatedAt();
@@ -2492,8 +2492,7 @@ public class MainActivity extends AppCompatActivity {
                 "AI 진로 상담",
                 "궁금한 해양 직무, 전공, 자격, 프로젝트와 학습 순서를 자유롭게 질문하면 BluePath AI가 내 관심 분야, 현재 티어와 앱의 학습 자료를 함께 검토해 맞춤 답변을 제공합니다. "
                         + "서버가 연결된 경우 기관 자료와 설정된 실시간 웹 검색 결과를 근거로 답변하고, 연결 전에는 오프라인 해양 상담 엔진으로 기본 진로 경로를 안내합니다.\n\n"
-                        + "직접 질문을 입력하거나 항해사 역량 로드맵, 스마트 항만 직무, 해양환경 연구자 준비 같은 추천 질문을 바로 선택할 수 있습니다. 답변 아래에서는 NCS 기반 추천 직무를 살펴보며 직무 적합도, 권장 티어, 업무 설명, 추천 이유, 필요한 역량, 연결 기관과 근무지 예시를 확인하고, "
-                        + "역량 진단 → 근거 영상 학습 → 승급 퀴즈 → 실제 교육 과정 → 자격·프로젝트 증빙으로 이어지는 준비 항로를 설계할 수 있습니다."
+                        + "이전 질문과 답변은 대화 기록으로 계속 남으며, 바로 이어서 후속 질문을 할 수 있습니다. 답변 아래에서는 NCS 기반 추천 직무와 단계별 준비 항로를 확인할 수 있습니다."
         );
         UserProfile p = store.getProfile();
         String tier = store.getTier();
@@ -2502,31 +2501,64 @@ public class MainActivity extends AppCompatActivity {
         content.addView(body(llmClient.isConfigured()
                 ? "보안 서버가 앱 데이터와 기관 자료를 검색하고, 설정된 경우 실시간 웹 검색·본문 추출 결과까지 함께 검토해 출처가 있는 답변을 제공합니다."
                 : "서버 연결 전에는 오프라인 해양 상담 엔진으로 기본 경로를 안내합니다."));
+
+        if (!agentConversation.isEmpty()) {
+            LinearLayout historyHeader = row();
+            historyHeader.setGravity(Gravity.CENTER_VERTICAL);
+            historyHeader.addView(big("상담 대화"), new LinearLayout.LayoutParams(0, -2, 1));
+            Button clear = outlineButton("대화 지우기");
+            clear.setOnClickListener(v -> {
+                agentConversation.clear();
+                agentDraft = "";
+                showApp(4);
+            });
+            historyHeader.addView(clear, new LinearLayout.LayoutParams(dp(112), dp(40)));
+            content.addView(historyHeader);
+            for (AgentTurn turn : agentConversation) {
+                addConversationBubble("나", turn.question, true);
+                if (turn.loading) {
+                    LinearLayout pending = card();
+                    pending.addView(label("BluePath AI"));
+                    pending.addView(big("답변을 준비하고 있습니다"));
+                    pending.addView(new ProgressBar(this));
+                    content.addView(pending);
+                    conversationScrollAnchor = pending;
+                } else if (!turn.error.isEmpty()) {
+                    View errorCard = addConversationBubble("BluePath AI", turn.error, false);
+                    conversationScrollAnchor = errorCard;
+                } else {
+                    View answerCard = addConversationBubble("BluePath AI", turn.answer, false);
+                    conversationScrollAnchor = answerCard;
+                }
+            }
+        } else {
+            content.addView(note("첫 질문을 입력하면 이 화면에 질문과 답변이 차례로 쌓입니다.", MUTED));
+        }
+
         EditText input = new EditText(this);
-        input.setHint("예: 자율운항선박 분야로 진출하려면 어떤 전공·자격·프로젝트가 필요해?");
+        input.setHint(agentConversation.isEmpty()
+                ? "예: 자율운항선박 분야로 진출하려면 어떤 전공·자격·프로젝트가 필요해?"
+                : "이전 답변에 이어 후속 질문을 입력하세요.");
         input.setMinLines(3);
+        input.setMaxLines(7);
+        input.setText(agentDraft);
         input.setTextColor(TEXT);
         input.setHintTextColor(MUTED);
         input.setBackgroundResource(R.drawable.bg_input);
+        configureKoreanTextInput(input, true);
+        bindDraft(input, value -> agentDraft = value);
         content.addView(input, new LinearLayout.LayoutParams(-1, -2));
-        Button ask = primaryButton("AI 진로 상담 받기");
+        Button ask = primaryButton(agentConversation.isEmpty() ? "AI 진로 상담 받기" : "후속 질문 보내기");
+        ask.setEnabled(!isAgentLoading());
         ask.setOnClickListener(v -> requestAgentAnswer(input.getText().toString()));
         LinearLayout.LayoutParams askParams = new LinearLayout.LayoutParams(-1, dp(50));
         askParams.setMargins(0, dp(10), 0, dp(10));
         content.addView(ask, askParams);
 
-        LinearLayout answerCard = card();
-        if (agentLoading) {
-            answerCard.addView(big("여러 자료를 검토해 답변을 구성하고 있습니다"));
-            answerCard.addView(new ProgressBar(this));
-        } else {
-            answerCard.addView(body(agentLastAnswer));
-        }
-        content.addView(answerCard);
-
         String[] chips = {"내 티어에서 시작할 진로", "항해사 역량 로드맵", "스마트 항만 직무", "해양환경 연구자 준비", "최신 자격·교육 확인 방법"};
         for (String chip : chips) {
             Button b = outlineButton(chip);
+            b.setEnabled(!isAgentLoading());
             b.setOnClickListener(v -> requestAgentAnswer(chip));
             content.addView(b, new LinearLayout.LayoutParams(-1, dp(44)));
         }
@@ -2536,37 +2568,65 @@ public class MainActivity extends AppCompatActivity {
         for (CareerItem c : RecommendationEngine.recommendedCareers(p, tier, store)) addCareerCard(c);
     }
 
+    private boolean isAgentLoading() {
+        return !agentConversation.isEmpty() && agentConversation.get(agentConversation.size() - 1).loading;
+    }
+
     private void requestAgentAnswer(String question) {
         final String trimmed = question == null ? "" : question.trim();
         if (trimmed.isEmpty()) {
             toast("질문을 입력해 주세요.");
             return;
         }
-        agentLoading = true;
+        if (isAgentLoading()) {
+            toast("이전 답변을 기다려 주세요.");
+            return;
+        }
+        final List<ApiModels.ChatMessage> history = agentHistoryMessages();
+        final AgentTurn turn = new AgentTurn(trimmed);
+        agentConversation.add(turn);
+        if (agentConversation.size() > 20) agentConversation.remove(0);
+        agentDraft = "";
         showApp(4);
+        scrollToConversationAnchor();
         executor.execute(() -> {
             String answer;
-            if (llmClient.isConfigured()) {
-                try {
+            try {
+                if (llmClient.isConfigured()) {
                     UserProfile profile = store.getProfile();
                     answer = llmClient.answerAgent(trimmed, profile, store.getTier(),
                             RecommendationEngine.recommendedContents(profile, store.getTier(), store),
-                            PromotionRules.fullManualPlain());
-                } catch (Exception e) {
-                    answer = "LLM 호출에 실패해 로컬 상담으로 전환했습니다.\n\n"
-                            + RecommendationEngine.answerAgent(trimmed, store.getProfile(), store.getTier())
-                            + "\n\n오류: " + safeMessage(e);
+                            PromotionRules.fullManualPlain(), history);
+                } else {
+                    answer = RecommendationEngine.answerAgent(trimmed, store.getProfile(), store.getTier());
                 }
-            } else {
-                answer = RecommendationEngine.answerAgent(trimmed, store.getProfile(), store.getTier());
+                turn.answer = answer;
+            } catch (Exception e) {
+                turn.error = "LLM 호출에 실패해 로컬 상담으로 전환했습니다.\n\n"
+                        + RecommendationEngine.answerAgent(trimmed, store.getProfile(), store.getTier())
+                        + "\n\n오류: " + safeMessage(e);
             }
-            final String result = answer;
+            turn.loading = false;
             runOnUiThread(() -> {
-                agentLoading = false;
-                agentLastAnswer = result;
-                showApp(4);
+                if (currentTab == 4) {
+                    showApp(4);
+                    scrollToConversationAnchor();
+                }
             });
         });
+    }
+
+    private List<ApiModels.ChatMessage> agentHistoryMessages() {
+        List<ApiModels.ChatMessage> history = new ArrayList<>();
+        int start = Math.max(0, agentConversation.size() - 8);
+        for (int i = start; i < agentConversation.size(); i++) {
+            AgentTurn turn = agentConversation.get(i);
+            if (turn.loading) continue;
+            history.add(new ApiModels.ChatMessage("user", turn.question));
+            String response = !turn.answer.isEmpty() ? turn.answer : turn.error;
+            if (!response.isEmpty()) history.add(new ApiModels.ChatMessage("assistant", response));
+        }
+        return history;
     }
 
     /**
@@ -4537,7 +4597,58 @@ public class MainActivity extends AppCompatActivity {
         field.setTextSize(14);
         field.setSingleLine(true);
         field.setBackgroundResource(R.drawable.bg_input);
+        configureKoreanTextInput(field, false);
         return field;
+    }
+
+    private void configureKoreanTextInput(EditText field, boolean multiLine) {
+        int type = InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT;
+        if (multiLine) type |= InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_VARIATION_LONG_MESSAGE;
+        field.setInputType(type);
+        field.setTextLocale(Locale.KOREAN);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            field.setImeHintLocales(new LocaleList(Locale.KOREAN, Locale.getDefault()));
+        }
+        field.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                | (multiLine ? EditorInfo.IME_ACTION_NONE : EditorInfo.IME_ACTION_DONE));
+        field.setHorizontallyScrolling(!multiLine);
+        field.setFocusableInTouchMode(true);
+    }
+
+    private void bindDraft(EditText field, Consumer<String> listener) {
+        field.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                listener.accept(s == null ? "" : s.toString());
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+    }
+
+    private View addConversationBubble(String speaker, String message, boolean user) {
+        LinearLayout bubble = card();
+        bubble.addView(label(speaker));
+        TextView text = body(message);
+        text.setTextIsSelectable(true);
+        bubble.addView(text);
+        if (user) {
+            GradientDrawable background = new GradientDrawable();
+            background.setColor(Color.parseColor("#E7FAFB"));
+            background.setStroke(dp(1), Color.parseColor("#86DDE1"));
+            background.setCornerRadius(dp(18));
+            bubble.setBackground(background);
+        }
+        content.addView(bubble);
+        return bubble;
+    }
+
+    private void scrollToConversationAnchor() {
+        final View anchor = conversationScrollAnchor;
+        final ScrollView scroll = contentScroll;
+        if (anchor == null || scroll == null) return;
+        scroll.postDelayed(() -> scroll.smoothScrollTo(0, Math.max(0, anchor.getTop() - dp(72))), 120L);
     }
 
     private TextView sectionTitle(String text) {
@@ -4770,24 +4881,93 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void addAiSearchBox(String resourceType, String hint, boolean loading, ApiModels.AiSearchResponse response) {
+    private void addAiSearchBox(String resourceType, String hint, List<AiSearchTurn> conversation) {
+        boolean loading = isSearchLoading(conversation, resourceType);
         LinearLayout searchCard = card();
         searchCard.addView(label("LLM 기반 검색"));
-        EditText input = inputField(hint, "");
+        EditText input = inputField(hint, searchDraft(resourceType));
         input.setSingleLine(false);
         input.setMinLines(2);
+        input.setMaxLines(6);
+        configureKoreanTextInput(input, true);
+        bindDraft(input, value -> setSearchDraft(resourceType, value));
         searchCard.addView(input);
-        Button search = primaryButton(loading ? "검색 중…" : "AI로 자료 찾기");
+        Button search = primaryButton(loading ? "검색 중…" : conversationHasType(conversation, resourceType) ? "후속 질문으로 다시 찾기" : "AI로 자료 찾기");
         search.setEnabled(!loading);
         search.setOnClickListener(v -> requestAiSearch(resourceType, input.getText().toString()));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(48));
         params.setMargins(0, dp(8), 0, 0);
         searchCard.addView(search, params);
         if (loading) searchCard.addView(new ProgressBar(this));
-        if (response != null) {
-            searchCard.addView(note(response.usedLiveWeb ? "앱 자료와 실시간 웹 근거를 함께 검토했습니다." : "앱에 등록된 자료를 기준으로 검색했습니다.", OCEAN));
-        }
         content.addView(searchCard);
+    }
+
+    private void renderAiSearchConversation(String resourceType, List<AiSearchTurn> conversation) {
+        List<AiSearchTurn> visible = new ArrayList<>();
+        for (AiSearchTurn turn : conversation) if (resourceType.equals(turn.resourceType)) visible.add(turn);
+        if (visible.isEmpty()) return;
+
+        LinearLayout header = row();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(sectionTitle("AI 검색 대화"), new LinearLayout.LayoutParams(0, -2, 1));
+        Button clear = outlineButton("기록 지우기");
+        clear.setOnClickListener(v -> {
+            conversation.removeIf(turn -> resourceType.equals(turn.resourceType));
+            setSearchDraft(resourceType, "");
+            showApp("schedule".equals(resourceType) ? 3 : 1);
+        });
+        header.addView(clear, new LinearLayout.LayoutParams(dp(112), dp(40)));
+        content.addView(header);
+
+        for (AiSearchTurn turn : visible) {
+            addConversationBubble("나", turn.query, true);
+            if (turn.loading) {
+                LinearLayout pending = card();
+                pending.addView(label("BluePath AI"));
+                pending.addView(big("자료와 근거를 찾고 있습니다"));
+                pending.addView(new ProgressBar(this));
+                content.addView(pending);
+                conversationScrollAnchor = pending;
+                continue;
+            }
+            if (!turn.error.isEmpty()) {
+                View error = addConversationBubble("BluePath AI", "검색 실패: " + turn.error, false);
+                conversationScrollAnchor = error;
+                continue;
+            }
+            ApiModels.AiSearchResponse response = turn.response;
+            if (response == null) continue;
+            LinearLayout answer = card();
+            answer.addView(label("BluePath AI"));
+            answer.addView(body(safeOr(response.summary, "검색 결과를 정리했습니다.")));
+            answer.addView(note(response.usedLiveWeb
+                    ? "앱 자료와 실시간 웹 근거를 함께 검토했습니다."
+                    : "앱에 등록된 자료를 기준으로 검색했습니다.", OCEAN));
+            content.addView(answer);
+            conversationScrollAnchor = answer;
+
+            int shown = 0;
+            if (response.items != null) {
+                for (ApiModels.ContentDto dto : response.items) {
+                    if ("video".equals(resourceType) && "video".equals(dto.contentType)) {
+                        addContentCard(contentFromDto(dto), false);
+                        shown++;
+                    } else if ("paper".equals(resourceType) && "paper".equals(dto.contentType)) {
+                        addPaperCard(paperFromDto(dto));
+                        shown++;
+                    } else if ("schedule".equals(resourceType)) {
+                        if ("event".equals(dto.contentType)) addEventCard(eventFromDto(dto));
+                        else addProgramCard(programFromDto(dto));
+                        shown++;
+                    }
+                    if (shown >= 8) break;
+                }
+            }
+            if (shown == 0) content.addView(note("조건에 맞는 등록 자료를 찾지 못했습니다. 조건을 바꿔 후속 질문을 해보세요.", MUTED));
+        }
+        if ("schedule".equals(resourceType)) {
+            content.addView(note("AI 검색 대화는 위 영역에만 표시되며, 아래 일정 둘러보기에는 영향을 주지 않습니다.", MUTED));
+        }
     }
 
     private void requestAiSearch(String resourceType, String query) {
@@ -4796,31 +4976,76 @@ public class MainActivity extends AppCompatActivity {
             toast("찾고 싶은 자료를 입력해 주세요.");
             return;
         }
-        boolean schedule = "schedule".equals(resourceType);
-        if (schedule) scheduleSearchLoading = true; else learningSearchLoading = true;
-        showApp(schedule ? 3 : 1);
+        List<AiSearchTurn> conversation = searchConversation(resourceType);
+        if (isSearchLoading(conversation, resourceType)) {
+            toast("이전 검색을 기다려 주세요.");
+            return;
+        }
+        List<ApiModels.ChatMessage> history = searchHistoryMessages(conversation, resourceType);
+        AiSearchTurn turn = new AiSearchTurn(resourceType, value);
+        conversation.add(turn);
+        if (conversation.size() > 30) conversation.remove(0);
+        setSearchDraft(resourceType, "");
+        int tab = "schedule".equals(resourceType) ? 3 : 1;
+        showApp(tab);
+        scrollToConversationAnchor();
         executor.execute(() -> {
             try {
-                ApiModels.AiSearchResponse result = cloudRepository.aiSearch(value, resourceType);
-                runOnUiThread(() -> {
-                    if (schedule) {
-                        scheduleSearchResponse = result;
-                        scheduleSearchLoading = false;
-                        showApp(3);
-                    } else {
-                        learningSearchResponse = result;
-                        learningSearchLoading = false;
-                        showApp(1);
-                    }
-                });
+                turn.response = cloudRepository.aiSearch(value, resourceType, history);
             } catch (Exception e) {
-                runOnUiThread(() -> {
-                    if (schedule) scheduleSearchLoading = false; else learningSearchLoading = false;
-                    toast("AI 검색 실패: " + safeMessage(e));
-                    showApp(schedule ? 3 : 1);
-                });
+                turn.error = safeMessage(e);
             }
+            turn.loading = false;
+            runOnUiThread(() -> {
+                if (currentTab == tab) {
+                    showApp(tab);
+                    scrollToConversationAnchor();
+                }
+            });
         });
+    }
+
+    private List<AiSearchTurn> searchConversation(String resourceType) {
+        return "schedule".equals(resourceType) ? scheduleSearchConversation : learningSearchConversation;
+    }
+
+    private boolean conversationHasType(List<AiSearchTurn> conversation, String resourceType) {
+        for (AiSearchTurn turn : conversation) if (resourceType.equals(turn.resourceType)) return true;
+        return false;
+    }
+
+    private boolean isSearchLoading(List<AiSearchTurn> conversation, String resourceType) {
+        for (int i = conversation.size() - 1; i >= 0; i--) {
+            AiSearchTurn turn = conversation.get(i);
+            if (resourceType.equals(turn.resourceType)) return turn.loading;
+        }
+        return false;
+    }
+
+    private List<ApiModels.ChatMessage> searchHistoryMessages(List<AiSearchTurn> conversation, String resourceType) {
+        List<ApiModels.ChatMessage> history = new ArrayList<>();
+        List<AiSearchTurn> sameType = new ArrayList<>();
+        for (AiSearchTurn turn : conversation) if (resourceType.equals(turn.resourceType) && !turn.loading) sameType.add(turn);
+        int start = Math.max(0, sameType.size() - 6);
+        for (int i = start; i < sameType.size(); i++) {
+            AiSearchTurn turn = sameType.get(i);
+            history.add(new ApiModels.ChatMessage("user", turn.query));
+            if (turn.response != null && turn.response.summary != null && !turn.response.summary.trim().isEmpty()) {
+                history.add(new ApiModels.ChatMessage("assistant", turn.response.summary.trim()));
+            } else if (!turn.error.isEmpty()) {
+                history.add(new ApiModels.ChatMessage("assistant", "검색 실패: " + turn.error));
+            }
+        }
+        return history;
+    }
+
+    private String searchDraft(String resourceType) {
+        return "schedule".equals(resourceType) ? scheduleSearchDraft : learningSearchDraft;
+    }
+
+    private void setSearchDraft(String resourceType, String value) {
+        if ("schedule".equals(resourceType)) scheduleSearchDraft = value == null ? "" : value;
+        else learningSearchDraft = value == null ? "" : value;
     }
 
     private ContentItem contentFromDto(ApiModels.ContentDto dto) {

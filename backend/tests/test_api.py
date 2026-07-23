@@ -81,13 +81,29 @@ def test_registration_sync_quiz_and_diamond_pathway() -> None:
         assert all(0 <= item['answerIndex'] <= 3 for item in submitted_quiz.json()['questions'])
 
         search = client.post('/api/v1/ai/search', headers=auth_header(token), json={
-            'query': '해양환경 입문 영상',
+            'query': '그중 입문자가 보기 쉬운 자료',
             'resourceType': 'video',
             'limit': 5,
+            'history': [
+                {'role': 'user', 'content': '해양환경 영상을 찾아줘'},
+                {'role': 'assistant', 'content': '해양환경 관련 영상을 살펴봤습니다.'},
+            ],
         })
         assert search.status_code == 200, search.text
         assert isinstance(search.json()['items'], list)
         assert search.json()['summary']
+        agent = client.post('/api/v1/ai/agent', headers=auth_header(token), json={
+            'question': '그 준비 과정에서 먼저 할 일은?',
+            'tier': '브론즈',
+            'profile': {'interest': '항해', 'level': '입문'},
+            'promotionManual': '',
+            'history': [
+                {'role': 'user', 'content': '항해사가 되려면 무엇이 필요해?'},
+                {'role': 'assistant', 'content': '기초 항해 지식과 관련 교육이 필요합니다.'},
+            ],
+        })
+        assert agent.status_code == 200, agent.text
+        assert agent.json()['answer']
         unrelated = client.post('/api/v1/ai/search', headers=auth_header(token), json={
             'query': 'zzqv unrelated resource token 987654321', 'resourceType': 'paper', 'limit': 5,
         })

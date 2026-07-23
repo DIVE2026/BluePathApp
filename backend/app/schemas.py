@@ -200,11 +200,17 @@ class QuizSubmissionResponse(CamelModel):
     questions: list[QuizQuestion] = Field(default_factory=list)
 
 
+class ConversationMessage(CamelModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    content: str = Field(min_length=1, max_length=4000)
+
+
 class AgentRequest(CamelModel):
     question: str = Field(min_length=1, max_length=2000)
     tier: str
     profile: dict[str, Any] = Field(default_factory=dict)
     promotionManual: str = ""
+    history: list[ConversationMessage] = Field(default_factory=list, max_length=20)
 
 
 class AgentResponse(CamelModel):
@@ -327,6 +333,7 @@ class AiSearchRequest(CamelModel):
     query: str = Field(min_length=1, max_length=1000)
     resourceType: str = Field(pattern="^(video|schedule|paper)$")
     limit: int = Field(default=10, ge=1, le=30)
+    history: list[ConversationMessage] = Field(default_factory=list, max_length=20)
 
 
 class AiSearchResponse(CamelModel):

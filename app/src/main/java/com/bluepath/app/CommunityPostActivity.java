@@ -3,12 +3,16 @@ package com.bluepath.app;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.LocaleList;
 import android.view.Gravity;
+import android.view.inputmethod.EditorInfo;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
+import android.text.InputType;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -19,6 +23,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.bluepath.app.repository.BluePathRepository;
 
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -108,6 +113,8 @@ public class CommunityPostActivity extends AppCompatActivity {
 
         titleInput = input("제목을 입력하세요");
         titleInput.setSingleLine(true);
+        configureKoreanTextInput(titleInput, false);
+        titleInput.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_ACTION_NEXT);
         form.addView(titleInput, new LinearLayout.LayoutParams(-1, dp(56)));
 
         TextView bodyLabel = text("내용", 13, TEXT, true);
@@ -117,6 +124,7 @@ public class CommunityPostActivity extends AppCompatActivity {
 
         bodyInput = input("내용을 입력하세요");
         bodyInput.setSingleLine(false);
+        configureKoreanTextInput(bodyInput, true);
         bodyInput.setGravity(Gravity.TOP | Gravity.START);
         bodyInput.setPadding(dp(14), dp(14), dp(14), dp(14));
         bodyInput.setMinLines(12);
@@ -179,7 +187,24 @@ public class CommunityPostActivity extends AppCompatActivity {
         input.setTextSize(15);
         input.setPadding(dp(14), 0, dp(14), 0);
         input.setBackground(rounded(Color.WHITE, Color.parseColor("#B8D7DF"), 14));
+        configureKoreanTextInput(input, false);
         return input;
+    }
+
+    private void configureKoreanTextInput(EditText input, boolean multiLine) {
+        int type = InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT;
+        if (multiLine) type |= InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_VARIATION_LONG_MESSAGE;
+        input.setInputType(type);
+        input.setTextLocale(Locale.KOREAN);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            input.setImeHintLocales(new LocaleList(Locale.KOREAN, Locale.getDefault()));
+        }
+        input.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                | (multiLine ? EditorInfo.IME_ACTION_NONE : EditorInfo.IME_ACTION_DONE));
+        input.setHorizontallyScrolling(!multiLine);
+        input.setFocusableInTouchMode(true);
     }
 
     private Button primaryButton(String label) {
