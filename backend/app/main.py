@@ -233,6 +233,10 @@ def apply_compatibility_migrations() -> None:
                 "ALTER COLUMN client_updated_at TYPE BIGINT "
                 "USING client_updated_at::BIGINT"
             )
+    if "community_posts" in tables:
+        columns = {column["name"] for column in inspector.get_columns("community_posts")}
+        if "image_url" not in columns:
+            statements.append("ALTER TABLE community_posts ADD COLUMN image_url TEXT NOT NULL DEFAULT ''")
     with engine.begin() as connection:
         for statement in statements:
             connection.execute(text(statement))
@@ -893,6 +897,18 @@ def list_community_posts(
     return [community_post_schema(db, item, user) for item in rows]
 
 
+@app.get("/api/v1/community/posts/{post_id}", response_model=CommunityPostItem)
+def get_community_post(
+    post_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CommunityPostItem:
+    post = db.get(CommunityPost, post_id)
+    if post is None or post.user_id in blocked_user_ids(db, user.id):
+        raise HTTPException(status_code=404, detail="Post not found")
+    return community_post_schema(db, post, user)
+
+
 @app.post("/api/v1/community/posts", response_model=CommunityPostItem)
 def create_community_post(
     request: CommunityPostCreate,
@@ -903,6 +919,54 @@ def create_community_post(
     db.add(post)
     db.commit()
     db.refresh(post)
+    return community_post_schema(db, post, user)
+
+
+@app.post("/api/v1/community/posts/{post_id}/image", response_model=CommunityPostItem)
+async def upload_community_post_image(
+    post_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CommunityPostItem:
+    post = db.get(CommunityPost, post_id)
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post.user_id != user.id and not is_admin(user):
+        raise HTTPException(status_code=403, detail="You cannot attach an image to this post")
+
+    content_type = (file.content_type or "").lower()
+    if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP post images are supported")
+    raw = await file.read(8_000_001)
+    if len(raw) > 8_000_000:
+        raise HTTPException(status_code=413, detail="Post image must be 8 MB or smaller")
+    signatures = {
+        "image/jpeg": raw.startswith(b"\xff\xd8\xff"),
+        "image/png": raw.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/webp": len(raw) >= 12 and raw.startswith(b"RIFF") and raw[8:12] == b"WEBP",
+    }
+    if not raw or not signatures[content_type]:
+        raise HTTPException(status_code=400, detail="Uploaded bytes do not match the declared image type")
+
+    extension = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}[content_type]
+    filename = f"community-{post.id}-{secrets.token_hex(6)}{extension}"
+    (UPLOADS_DIR / filename).write_bytes(raw)
+
+    previous_url = post.image_url or ""
+    post.image_url = str(request.base_url).rstrip("/") + f"/uploads/{filename}"
+    post.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(post)
+
+    previous_name = previous_url.rsplit("/", 1)[-1]
+    if previous_name.startswith(f"community-{post.id}-"):
+        previous_path = UPLOADS_DIR / previous_name
+        try:
+            previous_path.unlink(missing_ok=True)
+        except OSError:
+            pass
     return community_post_schema(db, post, user)
 
 
@@ -967,8 +1031,15 @@ def delete_community_post(
             (CommunityReaction.target_type == "comment") & CommunityReaction.target_id.in_(comment_ids or [""]),
         )
     ))
+    image_name = (post.image_url or "").rsplit("/", 1)[-1]
     db.delete(post)
     db.commit()
+    if image_name.startswith(f"community-{post_id}-"):
+        image_path = UPLOADS_DIR / image_name
+        try:
+            image_path.unlink(missing_ok=True)
+        except OSError:
+            pass
     return GenericResponse(message="Post deleted")
 
 
@@ -2342,6 +2413,7 @@ def community_post_schema(db: Session, post: CommunityPost, viewer: User) -> Com
         author=profile_summary(db, author, viewer),
         title=post.title,
         body=post.body,
+        imageUrl=post.image_url or "",
         createdAt=post.created_at,
         updatedAt=post.updated_at,
         canEdit=post.user_id == viewer.id or is_admin(viewer),

@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS community_posts (
   category VARCHAR(20) NOT NULL DEFAULT 'free' CHECK (category IN ('free', 'question')),
   title VARCHAR(240) NOT NULL,
   body TEXT NOT NULL,
+  image_url TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

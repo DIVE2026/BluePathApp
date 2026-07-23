@@ -661,8 +661,19 @@ def test_nickname_community_follow_reactions_and_dashboard() -> None:
             'body': '항만 물류 진로를 준비하려면 무엇부터 시작해야 하나요?',
         })
         assert post.status_code == 200, post.text
+        assert post.json()['imageUrl'] == ''
         post_id = post.json()['id']
         author_id = post.json()['author']['userId']
+
+        post_image = client.post(f'/api/v1/community/posts/{post_id}/image', headers=first_headers, files={
+            'file': ('post.png', png_1x1, 'image/png'),
+        })
+        assert post_image.status_code == 200, post_image.text
+        assert post_image.json()['imageUrl'].endswith('.png')
+        detail = client.get(f'/api/v1/community/posts/{post_id}', headers=second_headers)
+        assert detail.status_code == 200, detail.text
+        assert detail.json()['id'] == post_id
+        assert detail.json()['imageUrl'].endswith('.png')
 
         comment = client.post(f'/api/v1/community/posts/{post_id}/comments', headers=second_headers, json={
             'body': '기초 물류 영상과 현장 교육부터 추천합니다.',
@@ -688,6 +699,7 @@ def test_nickname_community_follow_reactions_and_dashboard() -> None:
         item = feed.json()[0]
         assert len(item['comments']) == 2
         assert item['author']['isFollowing'] is True
+        assert item['imageUrl'].endswith('.png')
         assert any(value['emoji'] == '🌊' and value['count'] == 1 for value in item['reactions'])
 
         searched = client.get('/api/v1/community/posts?category=question&q=BlueWhale&limit=1&offset=0', headers=second_headers)
