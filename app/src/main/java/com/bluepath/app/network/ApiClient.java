@@ -41,6 +41,16 @@ public final class ApiClient {
         return service;
     }
 
+    public static String resolveMediaUrl(String value) {
+        String media = value == null ? "" : value.trim();
+        if (media.isEmpty()) return "";
+        int uploadsIndex = media.indexOf("/uploads/");
+        if (uploadsIndex >= 0) media = media.substring(uploadsIndex + 1);
+        if (media.startsWith("http://") || media.startsWith("https://")) return media;
+        while (media.startsWith("/")) media = media.substring(1);
+        return normalizeBaseUrl(BuildConfig.BLUEPATH_API_BASE_URL) + media;
+    }
+
     private static String normalizeBaseUrl(String value) {
         String base = value == null ? "" : value.trim();
         if (base.isEmpty()) base = "http://127.0.0.1/";

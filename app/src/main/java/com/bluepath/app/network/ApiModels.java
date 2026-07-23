@@ -322,6 +322,7 @@ public final class ApiModels {
         public ProfileSummary author;
         public String title;
         public String body;
+        public String imageUrl;
         public String createdAt;
         public String updatedAt;
         public boolean canEdit;
