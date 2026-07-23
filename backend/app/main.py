@@ -92,6 +92,8 @@ from .schemas import (
     SyncRequest,
     SyncResponse,
     YouTubeSyncRequest,
+    VideoCompletionRequest,
+    VideoCompletionResponse,
     VideoEvidenceRequest,
     VideoEvidenceResponse,
     GuardianConsentRequestCreate,
@@ -205,6 +207,7 @@ def apply_compatibility_migrations() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     statements: list[str] = []
+    backfill_legacy_video_completions = False
     if "users" in tables:
         columns = {column["name"] for column in inspector.get_columns("users")}
         if "nickname" not in columns:
@@ -225,6 +228,7 @@ def apply_compatibility_migrations() -> None:
         }
         if "device_id" not in learning_record_columns:
             statements.append("ALTER TABLE learning_records ADD COLUMN device_id VARCHAR(80) NOT NULL DEFAULT ''")
+
         client_updated_at = learning_record_columns.get("client_updated_at")
         client_updated_at_type = str(client_updated_at["type"]).upper() if client_updated_at else ""
         if engine.dialect.name == "postgresql" and client_updated_at_type in {"INTEGER", "INT", "INT4"}:
@@ -237,9 +241,14 @@ def apply_compatibility_migrations() -> None:
         columns = {column["name"] for column in inspector.get_columns("community_posts")}
         if "image_url" not in columns:
             statements.append("ALTER TABLE community_posts ADD COLUMN image_url TEXT NOT NULL DEFAULT ''")
+
     with engine.begin() as connection:
         for statement in statements:
             connection.execute(text(statement))
+        if backfill_legacy_video_completions:
+            connection.execute(text(
+                "UPDATE video_learning_evidence SET completed_at = verified_at WHERE completed_at IS NULL"
+            ))
         if "users" in tables:
             connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_nickname ON users (nickname)"))
             connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_users_nickname_ci ON users (lower(nickname))"))
@@ -1344,13 +1353,17 @@ def valid_paper_evidence_ids(db: Session, user_id: str) -> list[str]:
 def apply_verified_evidence(db: Session, user_id: str, snapshot: dict) -> dict:
     result = dict(snapshot or {})
     video_ids = list(db.scalars(select(VideoLearningEvidence.content_id).where(VideoLearningEvidence.user_id == user_id)))
+    completed_video_ids = list(db.scalars(select(VideoLearningEvidence.content_id).where(
+        VideoLearningEvidence.user_id == user_id,
+        VideoLearningEvidence.completed_at.is_not(None),
+    )))
     paper_ids = valid_paper_evidence_ids(db, user_id)
     badges = list(db.scalars(select(MissionEvidence.badge).where(
         MissionEvidence.user_id == user_id, MissionEvidence.status == "verified"
     )))
     result["verifiedVideoIds"] = sorted(set(video_ids))
     result["verifiedPaperIds"] = paper_ids
-    result["completedContentIds"] = sorted(set(video_ids) | set(paper_ids))
+    result["completedContentIds"] = sorted(set(completed_video_ids) | set(paper_ids))
     result["missionBadges"] = sorted({badge for badge in badges if badge})
     return result
 
@@ -1530,11 +1543,9 @@ def verify_video_learning(
     existing = db.scalar(select(VideoLearningEvidence).where(
         VideoLearningEvidence.user_id == user.id, VideoLearningEvidence.content_id == request.contentId,
     ))
-    xp_awarded = 0
     if existing is None:
         existing = VideoLearningEvidence(user_id=user.id, content_id=request.contentId)
         db.add(existing)
-        xp_awarded = 100
     existing.duration_seconds = request.durationSeconds
     existing.watched_seconds = watched
     existing.coverage_percent = coverage
@@ -1542,17 +1553,6 @@ def verify_video_learning(
     existing.verified_at = datetime.now(timezone.utc)
 
     progress = get_or_create_progress(db, user.id)
-    if xp_awarded:
-        progress.xp += xp_awarded
-        topic = content.topic or "해양교육"
-        evidence = dict(progress.skill_evidence_json or {})
-        mastery = dict(progress.skill_mastery_json or {})
-        count = int(evidence.get(topic, 0))
-        old = int(mastery.get(topic, 50))
-        evidence[topic] = count + 1
-        mastery[topic] = round((old * count + 80) / max(1, count + 1))
-        progress.skill_evidence_json = evidence
-        progress.skill_mastery_json = mastery
     profile = db.get(UserProfile, user.id) or UserProfile(user_id=user.id)
     status = diamond_status_for(db, user, progress=progress)
     profile.snapshot = apply_verified_evidence(db, user.id, apply_account_state(apply_authoritative_progress(profile.snapshot or {}, progress, diamond_eligible=status.eligible), user))
@@ -1560,8 +1560,74 @@ def verify_video_learning(
     db.add(profile)
     db.commit()
     return VideoEvidenceResponse(
-        verified=True, watchedSeconds=watched, coveragePercent=coverage, xpAwarded=xp_awarded,
+        verified=True, watchedSeconds=watched, coveragePercent=coverage, xpAwarded=0,
         message="Distinct playback coverage was verified by the server.",
+    )
+
+
+@app.post("/api/v1/learning/video/complete", response_model=VideoCompletionResponse)
+def complete_video_learning(
+    request: VideoCompletionRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> VideoCompletionResponse:
+    require_guardian_consent_for_minor(db, user)
+    content = db.get(Content, request.contentId)
+    if content is None or content.content_type != "video":
+        raise HTTPException(status_code=404, detail="Video content not found")
+    reflection = request.reflection.strip()
+    if reflection and len(reflection) < 10:
+        raise HTTPException(status_code=422, detail="Reflection must contain at least 10 characters")
+    evidence = db.scalar(
+        select(VideoLearningEvidence)
+        .where(
+            VideoLearningEvidence.user_id == user.id,
+            VideoLearningEvidence.content_id == request.contentId,
+        )
+        .with_for_update()
+    )
+    if evidence is None:
+        raise HTTPException(status_code=409, detail="Verified video watch evidence is required before completion")
+
+    progress = get_or_create_progress(db, user.id)
+    xp_awarded = 0
+    if evidence.completed_at is None:
+        evidence.completed_at = datetime.now(timezone.utc)
+        evidence.reflection = reflection
+        xp_awarded = 100 if reflection else 70
+        progress.xp += xp_awarded
+
+        topic = content.topic or "해양교육"
+        skill_evidence = dict(progress.skill_evidence_json or {})
+        mastery = dict(progress.skill_mastery_json or {})
+        count = int(skill_evidence.get(topic, 0))
+        old = int(mastery.get(topic, 50))
+        skill_evidence[topic] = count + 1
+        mastery[topic] = round((old * count + 80) / max(1, count + 1))
+        progress.skill_evidence_json = skill_evidence
+        progress.skill_mastery_json = mastery
+
+    db.flush()
+    profile = db.get(UserProfile, user.id) or UserProfile(user_id=user.id, snapshot={}, version=0)
+    status = diamond_status_for(db, user, progress=progress)
+    profile.snapshot = apply_verified_evidence(
+        db,
+        user.id,
+        apply_account_state(
+            apply_authoritative_progress(
+                profile.snapshot or {}, progress, diamond_eligible=status.eligible
+            ),
+            user,
+        ),
+    )
+    profile.version = int(profile.version or 0) + 1
+    db.add(profile)
+    db.commit()
+    return VideoCompletionResponse(
+        completed=True,
+        xpAwarded=xp_awarded,
+        message="Video learning was completed.",
+        completedAt=evidence.completed_at,
     )
 
 
