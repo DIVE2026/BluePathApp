@@ -193,7 +193,6 @@ def test_registration_sync_quiz_and_diamond_pathway() -> None:
         assert blank_note.status_code == 422
 
         record_id = '123e4567-e89b-42d3-a456-426614174000'
-        client_updated_at_ms = 1_784_730_513_527
         sync = client.post('/api/v1/sync', headers=auth_header(token), json={
             'snapshot': {
                 'tier': '플래티넘',
@@ -207,7 +206,7 @@ def test_registration_sync_quiz_and_diamond_pathway() -> None:
                 'targetId': '브론즈',
                 'title': 'Server verified promotion quiz',
                 'status': 'passed',
-                'updatedAt': client_updated_at_ms,
+                'updatedAt': 1,
                 'synced': False,
             }],
             'baseVersion': 0,
@@ -223,7 +222,6 @@ def test_registration_sync_quiz_and_diamond_pathway() -> None:
         assert cloud.json()['snapshot']['tier'] == '실버'
         assert cloud.json()['learningRecords'][0]['id'] == record_id
         assert cloud.json()['learningRecords'][0]['status'] == 'passed'
-        assert cloud.json()['learningRecords'][0]['updatedAt'] == client_updated_at_ms
 
         for evidence_type in ('certification', 'project'):
             submitted = client.post('/api/v1/diamond/evidence', headers=auth_header(token), json={

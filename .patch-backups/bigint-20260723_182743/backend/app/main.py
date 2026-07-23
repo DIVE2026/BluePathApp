@@ -220,19 +220,9 @@ def apply_compatibility_migrations() -> None:
         if "version" not in columns:
             statements.append("ALTER TABLE user_profiles ADD COLUMN version INTEGER NOT NULL DEFAULT 0")
     if "learning_records" in tables:
-        learning_record_columns = {
-            column["name"]: column for column in inspector.get_columns("learning_records")
-        }
-        if "device_id" not in learning_record_columns:
+        columns = {column["name"] for column in inspector.get_columns("learning_records")}
+        if "device_id" not in columns:
             statements.append("ALTER TABLE learning_records ADD COLUMN device_id VARCHAR(80) NOT NULL DEFAULT ''")
-        client_updated_at = learning_record_columns.get("client_updated_at")
-        client_updated_at_type = str(client_updated_at["type"]).upper() if client_updated_at else ""
-        if engine.dialect.name == "postgresql" and client_updated_at_type in {"INTEGER", "INT", "INT4"}:
-            statements.append(
-                "ALTER TABLE learning_records "
-                "ALTER COLUMN client_updated_at TYPE BIGINT "
-                "USING client_updated_at::BIGINT"
-            )
     with engine.begin() as connection:
         for statement in statements:
             connection.execute(text(statement))
