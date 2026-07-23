@@ -4627,20 +4627,76 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private View addConversationBubble(String speaker, String message, boolean user) {
-        LinearLayout bubble = card();
-        bubble.addView(label(speaker));
-        TextView text = body(message);
-        text.setTextIsSelectable(true);
-        bubble.addView(text);
+        LinearLayout messageRow = new LinearLayout(this);
+        messageRow.setOrientation(LinearLayout.VERTICAL);
+        messageRow.setGravity(user ? Gravity.END : Gravity.START);
+        messageRow.setPadding(user ? dp(44) : 0, dp(4), user ? 0 : dp(24), dp(4));
+
+        TextView speakerView = new TextView(this);
+        speakerView.setText(tierText(speaker));
+        speakerView.setTextSize(11);
+        speakerView.setTypeface(Typeface.DEFAULT_BOLD);
+        speakerView.setGravity(Gravity.CENTER);
+        speakerView.setIncludeFontPadding(false);
+        speakerView.setPadding(dp(9), dp(4), dp(9), dp(4));
+
+        GradientDrawable speakerBackground = new GradientDrawable();
+        speakerBackground.setCornerRadius(dp(999));
         if (user) {
-            GradientDrawable background = new GradientDrawable();
-            background.setColor(Color.parseColor("#E7FAFB"));
-            background.setStroke(dp(1), Color.parseColor("#86DDE1"));
-            background.setCornerRadius(dp(18));
-            bubble.setBackground(background);
+            speakerView.setTextColor(Color.parseColor("#075985"));
+            speakerBackground.setColor(Color.parseColor("#CFFAFE"));
+            speakerBackground.setStroke(dp(1), Color.parseColor("#67E8F9"));
+        } else {
+            speakerView.setTextColor(Color.parseColor("#46637A"));
+            speakerBackground.setColor(Color.parseColor("#EEF5F7"));
+            speakerBackground.setStroke(dp(1), Color.parseColor("#D3E3E7"));
         }
-        content.addView(bubble);
-        return bubble;
+        speakerView.setBackground(speakerBackground);
+
+        LinearLayout.LayoutParams speakerParams = new LinearLayout.LayoutParams(-2, -2);
+        speakerParams.setMargins(0, 0, 0, dp(5));
+        messageRow.addView(speakerView, speakerParams);
+
+        TextView messageView = new TextView(this);
+        messageView.setText(tierText(message));
+        messageView.setTextSize(user ? 15 : 14);
+        messageView.setTextColor(user ? Color.WHITE : TEXT);
+        messageView.setLineSpacing(dp(2), 1.08f);
+        messageView.setPadding(dp(16), dp(12), dp(16), dp(12));
+        messageView.setTextIsSelectable(true);
+        messageView.setMaxWidth((int) (getResources().getDisplayMetrics().widthPixels
+                * (user ? 0.82f : 0.92f)));
+
+        GradientDrawable messageBackground = new GradientDrawable();
+        if (user) {
+            messageBackground.setColor(Color.parseColor("#087F8C"));
+            messageBackground.setStroke(dp(1), Color.parseColor("#0E7490"));
+            messageBackground.setCornerRadii(new float[]{
+                    dp(18), dp(18),
+                    dp(18), dp(18),
+                    dp(5), dp(5),
+                    dp(18), dp(18)
+            });
+            messageView.setElevation(dp(2));
+        } else {
+            messageBackground.setColor(Color.WHITE);
+            messageBackground.setStroke(dp(1), Color.parseColor("#D3E3E7"));
+            messageBackground.setCornerRadii(new float[]{
+                    dp(18), dp(18),
+                    dp(18), dp(18),
+                    dp(18), dp(18),
+                    dp(5), dp(5)
+            });
+            messageView.setElevation(dp(1));
+        }
+        messageView.setBackground(messageBackground);
+
+        messageRow.addView(messageView, new LinearLayout.LayoutParams(-2, -2));
+
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+        rowParams.setMargins(0, 0, 0, dp(12));
+        content.addView(messageRow, rowParams);
+        return messageRow;
     }
 
     private void scrollToConversationAnchor() {
