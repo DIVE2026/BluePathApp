@@ -1536,7 +1536,7 @@ public class MainActivity extends AppCompatActivity {
             generate.setEnabled(!missionLoading);
             generate.setOnClickListener(v -> launchMissionQrScanner());
             mission.addView(generate, new LinearLayout.LayoutParams(-1, dp(48)));
-            mission.addView(body("카메라로 박물관이 발급한 서명 QR을 스캔해야 미션이 생성됩니다. 텍스트 입력이나 하드코딩 전시 코드는 인증에 사용할 수 없습니다."));
+            mission.addView(body("카메라로 박물관이 발급한 서명 QR을 스캔해야 미션이 생성됩니다."));
         } else {
             mission.addView(big(currentMission.title));
             mission.addView(body(currentMission.story));
@@ -4167,7 +4167,7 @@ public class MainActivity extends AppCompatActivity {
         boolean archived = RecommendationEngine.isArchived(item.startDate, item.endDate);
         LinearLayout card = card();
         card.addView(label(item.topic + " · 추천 " + score + "점 · " + status));
-        card.addView(big("📚 " + item.title));
+        card.addView(big("(교육) " + item.title));
         card.addView(body(item.startDate + " ~ " + item.endDate + " · " + item.target + " · " + item.method));
         card.addView(body("시간대 " + item.timezone
                 + (item.capacity > 0 ? " · 정원 " + item.capacity + "명" : "")
